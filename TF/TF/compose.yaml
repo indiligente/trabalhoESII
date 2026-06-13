@@ -1,0 +1,11 @@
+services:
+ rabbitmq:
+ image: rabbitmq:management
+ ports:
+ - "5672:5672"
+ - "15672:15672"
+ environment:
+ - RABBITMQ_DEFAULT_USER=engsoft2
+ - RABBITMQ_DEFAULT_PASS=engsoft2
+ networks:
+ - currency-network
