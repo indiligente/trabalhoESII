@@ -1,11 +1,18 @@
 server:
- port: 8765
+ port: 8766
 spring:
  application:
- name: TF
+ name: retrieval-service
  cloud:
  gateway.server.webflux:
  discovery:
+ ai:
+  vextorstore:
+    qdrant:
+      host: localhost
+      port:6334
+      collection-name: documentos_ia
+      api-token: ""
  locator:
  enabled: true
  lower-case-service-id: true
