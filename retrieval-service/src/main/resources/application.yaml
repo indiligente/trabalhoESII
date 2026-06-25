@@ -9,8 +9,8 @@ spring:
  ai:
   vextorstore:
     qdrant:
-      host: localhost
-      port:6334
+      host: ${QDRANT_HOST:localhost}
+      port: ${QDRANT_PORT:6334}
       collection-name: documentos_ia
       api-token: ""
  locator:
