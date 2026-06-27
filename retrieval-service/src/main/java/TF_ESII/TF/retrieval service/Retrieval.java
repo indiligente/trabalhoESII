@@ -15,18 +15,18 @@ public class Retrieval {
     @Autowired
     private VectorStore vectorStore;
 
-	public void salvarDocumento(String conteudo, Map<Strinf, Object> metadados){
-		Document documento = new Documento(conteudo, metadados);
+	public void salvarDocumento(String conteudo, Map<String, Object> metadados){
+		Document documento = new Document(conteudo, metadados);
 
-		vectorStore.add(Lis.of(documento));
+		vectorStore.add(List.of(documento));
 	}
 
 	public List<Document> buscarDocumentos(String perguntaUsuario){
-		SearchRequest requisicao = SearchResult.builder()
+		SearchRequest requisicao = SearchRequest.builder()
 			.query(perguntaUsuario)
 			.topK(3)
-			.similaityThreshold(0.7)
-			.build;
+			.similarityThreshold(0.7)
+			.build();
 		return vectorStore.similaritySearch(requisicao);
 	}
 }
