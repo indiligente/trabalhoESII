@@ -7,7 +7,7 @@ spring:
  gateway.server.webflux:
  discovery:
  ai:
-  vextorstore:
+  vectorstore:
     qdrant:
       host: ${QDRANT_HOST:localhost}
       port: ${QDRANT_PORT:6334}
