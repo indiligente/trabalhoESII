@@ -5,8 +5,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=engsoft2
-      - RABBITMQ_DEFAULT_PASS=engsoft2
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
     networks:
       - platform_network
 
@@ -14,9 +14,9 @@ services:
     image: postgres:14-alpine
     restart: always
     environment:
-      - POSTGRES_USER=root
-      - POSTGRES_PASSWORD=secret
-      - POSTGRES_DB=memory_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     networks:
       - platform_network
     volumes:
@@ -28,16 +28,18 @@ services:
     networks:
       - platform_network
 
-  memory-service:
-    build: ./memory-service
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://root:secret@postgres:5432/memory_db
-      - REDIS_URL=redis://redis:6379/0
-    networks:
-      - platform_network
+  service-memory:
+   build: ./service-memory
+   ports:
+      - "8000:8000"
+   depends_on:
+     - postgres
+     - redis
+   environment:
+     - DATABASE_URL=${DATABASE_URL}
+     - REDIS_URL=${REDIS_URL}
+   networks:
+     - platform_network
 
 networks:
   platform_network:

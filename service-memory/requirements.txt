@@ -1,0 +1,6 @@
+fastapi
+sqlalchemy
+uvicorn[standard]
+asyncpg
+redis
+pydantic-settings
