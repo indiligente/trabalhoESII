@@ -1,7 +1,10 @@
 package TF_ESII.TF.DTO;
+
 import java.util.List;
 
-public class AgentResponse {
-    record AgentResponseRecord(String idSessao, String answare, List<String> ferramenta, int iteracoes) {
-    }
-}
+public record AgentResponse(
+    String sessionId,
+    String answer,
+    List<String> toolsUsed,
+    int iterations
+) {}

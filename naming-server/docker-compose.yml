@@ -1,0 +1,46 @@
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # painel web: http://localhost:15672 (guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  agent-service:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_DATA_REDIS_HOST: redis
+      # Eureka em modo standalone (não tenta se registrar nem buscar outros serviços)
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: "http://localhost:8765/eureka"
+      # Desabilita autoconfigurações de IA que não são usadas diretamente neste serviço
+      SPRING_AI_OLLAMA_CHAT_ENABLED: "false"
+      SPRING_AI_OLLAMA_EMBEDDING_ENABLED: "false"
+      SPRING_AI_VECTORSTORE_QDRANT_ENABLED: "false"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
