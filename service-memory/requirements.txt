@@ -4,3 +4,4 @@ uvicorn[standard]
 asyncpg
 redis
 pydantic-settings
+alembic

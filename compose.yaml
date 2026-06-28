@@ -13,6 +13,8 @@ services:
   postgres:
     image: postgres:14-alpine
     restart: always
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -29,17 +31,20 @@ services:
       - platform_network
 
   service-memory:
-   build: ./service-memory
-   ports:
+    build: ./service-memory
+    ports:
       - "8000:8000"
-   depends_on:
-     - postgres
-     - redis
-   environment:
-     - DATABASE_URL=${DATABASE_URL}
-     - REDIS_URL=${REDIS_URL}
-   networks:
-     - platform_network
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - ./service-memory/.env
+
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    networks:
+      - platform_network
 
 networks:
   platform_network:
