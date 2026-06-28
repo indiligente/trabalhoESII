@@ -1,11 +1,36 @@
 services:
- rabbitmq:
- image: rabbitmq:management
- ports:
- - "5672:5672"
- - "15672:15672"
- environment:
- - RABBITMQ_DEFAULT_USER=engsoft2
- - RABBITMQ_DEFAULT_PASS=engsoft2
- networks:
- - currency-network
+  naming-server:
+    build: ./naming-server
+    ports:
+      - "8761:8761"
+    environment:
+      - SERVER_PORT=8761
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+    networks:
+      - currency-network
+
+  tool-registry:
+    build: ./tool-registry
+    ports:
+      - "8400:8400"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://naming-server:8761/eureka
+    depends_on:
+      - naming-server
+    networks:
+      - currency-network
+
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=engsoft2
+      - RABBITMQ_DEFAULT_PASS=engsoft2
+    networks:
+      - currency-network
+
+networks:
+  currency-network:
