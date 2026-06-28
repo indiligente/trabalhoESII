@@ -1,11 +1,47 @@
 services:
- rabbitmq:
- image: rabbitmq:management
- ports:
- - "5672:5672"
- - "15672:15672"
- environment:
- - RABBITMQ_DEFAULT_USER=engsoft2
- - RABBITMQ_DEFAULT_PASS=engsoft2
- networks:
- - currency-network
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=engsoft2
+      - RABBITMQ_DEFAULT_PASS=engsoft2
+    networks:
+      - platform_network
+
+  postgres:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=memory_db
+    networks:
+      - platform_network
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks:
+      - platform_network
+
+  memory-service:
+    build: ./memory-service
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://root:secret@postgres:5432/memory_db
+      - REDIS_URL=redis://redis:6379/0
+    networks:
+      - platform_network
+
+networks:
+  platform_network:
+    driver: bridge
+
+volumes:
+  db_data:
