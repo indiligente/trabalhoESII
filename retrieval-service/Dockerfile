@@ -1,5 +1,5 @@
 ﻿#imagem para o processo de build
-FROM eclipse-temurin:25-jdk-alpine AS build
+FROM eclipse-temurin:21-jdk-alpine AS build
 #diretório de trabalho
 WORKDIR /workspace/app
 #copiar arquivos do maven
