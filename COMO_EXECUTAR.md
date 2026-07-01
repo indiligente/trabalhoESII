@@ -1,152 +1,174 @@
 # Como Executar — Plataforma de Agentes Conversacionais
 
-Este guia cobre a containerização da plataforma com Docker Compose, os testes de cada serviço e os resultados esperados.
+---
+
+## Estrutura de pastas (importante saber antes de começar)
+
+```
+trabalhoESII/              ← RAIZ DO PROJETO — rode o compose principal aqui
+├── compose.yaml           ← arquivo principal que sobe TUDO junto
+├── COMO_EXECUTAR.md
+├── naming-server/         ← Eureka (servidor de nomes)
+│   ├── Dockerfile
+│   └── docker-compose.yml ← serve só para testar o naming-server isolado
+├── llm-gateway/           ← Gateway Python que acessa o Ollama
+│   ├── Dockerfile
+│   └── main.py
+└── agent-service/         ← Serviço Java com o ciclo agêntico
+    ├── Dockerfile
+    └── src/
+```
+
+> **Regra de ouro:** use sempre o `compose.yaml` da **raiz** (`trabalhoESII/`) para subir a plataforma completa. Os `Dockerfile` dentro de cada pasta são usados automaticamente por ele.
 
 ---
 
 ## Pré-requisitos
 
-| Ferramenta | Versão mínima | Verificar |
+| Ferramenta | Versão mínima | Como verificar |
 |---|---|---|
 | Docker Desktop | 24+ | `docker --version` |
 | Docker Compose | 2.20+ | `docker compose version` |
-| Git | qualquer | `git --version` |
 
-> **Memória RAM:** recomendado pelo menos 8 GB livres para rodar Ollama + todos os serviços simultaneamente.
+> **RAM recomendada:** mínimo 8 GB livres para rodar Ollama + todos os serviços.
 
 ---
 
-## 1. Baixar o modelo de linguagem (obrigatório antes do primeiro start)
+## Passo 1 — Baixar o modelo de linguagem (só na primeira vez)
 
-O Ollama precisa ter o modelo disponível localmente. Execute **uma vez** antes de subir os containers:
+> **Por que fazer isso antes?** O Ollama precisa ter o modelo em disco antes de responder ao healthcheck do `compose.yaml`. Se o modelo não estiver baixado, o container `ollama` nunca ficará "healthy" e os outros serviços não sobem.
 
-```bash
-# Puxa o modelo llama3.2 (≈2 GB de download)
-docker run --rm -v ollama_data:/root/.ollama ollama/ollama pull llama3.2
+Execute os 4 comandos abaixo **na ordem**, a partir de **qualquer pasta**:
+
+```powershell
+# 1. Sobe um container Ollama temporário com o volume persistente
+docker run -d --name ollama-setup -v ollama_data:/root/.ollama ollama/ollama
+
+# 2. Aguarda o servidor Ollama estar pronto (fica esperando até responder)
+docker exec ollama-setup sh -c "until ollama list > /dev/null 2>&1; do sleep 1; done && echo Servidor pronto"
+
+# 3. Baixa o modelo (≈2 GB — pode levar alguns minutos)
+docker exec ollama-setup ollama pull llama3.2
+
+# 4. Remove o container temporário (o volume ollama_data fica salvo no Docker)
+docker stop ollama-setup && docker rm ollama-setup
 ```
 
-> Se preferir outro modelo (ex: `llama3.2:1b` para máquinas mais modestas), ajuste a variável `LLM_MODEL` no `compose.yaml`.
+Quando o passo 3 terminar você verá algo como:
+```
+pulling manifest
+pulling 966de95ca8a6... 100% ██████████ 2.0 GB
+success
+```
 
 ---
 
-## 2. Subir toda a plataforma
+## Passo 2 — Subir toda a plataforma
 
-Na raiz do projeto (onde está o `compose.yaml`):
+> **Pasta obrigatória:** `trabalhoESII/` (onde está o `compose.yaml`)
 
-```bash
-# Build de todas as imagens e start dos containers
+```powershell
+# Navegue até a raiz do projeto
+cd C:\Users\manue\Documents\Faculdade\EngenhariaSoftwareII\trabalhoESII
+
+# Constrói as imagens e sobe todos os containers
 docker compose up --build
 ```
 
-Para rodar em background (detached):
-
-```bash
+Para rodar em background (libera o terminal):
+```powershell
 docker compose up --build -d
 ```
 
-### Ordem de inicialização esperada
+### Ordem de inicialização automática
+
+O `compose.yaml` garante esta sequência via `depends_on`:
 
 ```
-naming-server   →  rabbitmq + ollama  →  llm-gateway  →  agent-service
+naming-server (8761)
+      │
+      ├── rabbitmq (5672)
+      │
+      └── ollama (11434)  ← precisa do modelo baixado no Passo 1
+              │
+          llm-gateway (8767)
+                  │
+            agent-service (8765)
 ```
 
-O `depends_on` com `condition: service_healthy` garante esta ordem automaticamente. Na primeira vez, aguarde cerca de **2–3 minutos** até todos os serviços estarem saudáveis.
+Na primeira vez, aguarde **3–5 minutos** até todos ficarem "healthy".
 
 ---
 
-## 3. Verificar status dos serviços
+## Passo 3 — Confirmar que tudo subiu
 
-```bash
+```powershell
+# Ainda na pasta trabalhoESII/
 docker compose ps
 ```
 
-Todos devem mostrar status `running` (healthy):
+Todos devem mostrar `running`:
 
-| Serviço | Porta | Health endpoint |
+| Serviço | Porta | URL de verificação |
 |---|---|---|
-| naming-server | 8761 | http://localhost:8761/actuator/health |
+| naming-server | 8761 | http://localhost:8761 |
+| rabbitmq | 15672 | http://localhost:15672 (guest/guest) |
 | ollama | 11434 | http://localhost:11434/api/tags |
 | llm-gateway | 8767 | http://localhost:8767/health |
 | agent-service | 8765 | http://localhost:8765/actuator/health |
-| rabbitmq | 15672 | http://localhost:15672 (guest/guest) |
 
 ---
 
-## 4. Testes
+## Passo 4 — Testes
 
-### 4.1 Testar o naming-server (Eureka)
+### 4.1 Naming-server (Eureka)
 
-```bash
-curl http://localhost:8761/eureka/apps
-```
+Abra no browser: [http://localhost:8761](http://localhost:8761)
 
-**Resultado esperado:** XML ou JSON listando os serviços registrados. Após todos subirem, você verá `llm-gateway` e `agent-service` na lista.
-
-Acesse também o painel web: [http://localhost:8761](http://localhost:8761)
+Você deve ver o painel do Eureka com `llm-gateway` e `agent-service` registrados.
 
 ---
 
-### 4.2 Testar o llm-gateway diretamente
+### 4.2 LLM-gateway
 
 **Health check:**
-```bash
+```powershell
 curl http://localhost:8767/health
 ```
-
 Resultado esperado:
 ```json
-{
-  "status": "UP",
-  "service": "llm-gateway",
-  "model": "ollama/llama3.2",
-  "ollamaBase": "http://ollama:11434"
-}
+{"status": "UP", "service": "llm-gateway", "model": "ollama/llama3.2", "ollamaBase": "http://ollama:11434"}
 ```
 
-**Chamada de chat:**
-```bash
-curl -X POST http://localhost:8767/api/llm/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {"role": "system", "content": "Você é um assistente direto e objetivo."},
-      {"role": "user",   "content": "Qual é a capital do Brasil?"}
-    ],
-    "availableTools": []
-  }'
+**Teste de chat direto (sem passar pelo agent-service):**
+```powershell
+curl -X POST http://localhost:8767/api/llm/chat `
+  -H "Content-Type: application/json" `
+  -d '{\"messages\": [{\"role\": \"user\", \"content\": \"Qual a capital do Brasil?\"}]}'
 ```
-
 Resultado esperado:
 ```json
-{
-  "content": "A capital do Brasil é Brasília.",
-  "toolCalls": [],
-  "finishReason": "stop"
-}
+{"content": "A capital do Brasil é Brasília.", "toolCalls": [], "finishReason": "stop"}
 ```
 
-> Na primeira chamada, o Ollama pode demorar 10–30 segundos para carregar o modelo em memória.
+> Na **primeira chamada** o Ollama pode demorar 10–60 segundos para carregar o modelo em memória. As próximas são rápidas.
 
 ---
 
-### 4.3 Testar o agent-service
+### 4.3 Agent-service (ciclo ReAct completo)
 
 **Health check:**
-```bash
+```powershell
 curl http://localhost:8765/actuator/health
 ```
 
-**Enviar uma mensagem ao agente (ciclo ReAct completo):**
-```bash
-curl -X POST http://localhost:8765/api/agent/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "Qual é a data e hora atual?",
-    "sessionId": null
-  }'
+**Enviar mensagem ao agente:**
+```powershell
+curl -X POST http://localhost:8765/api/agent/chat `
+  -H "Content-Type: application/json" `
+  -d '{\"message\": \"Qual a data e hora atual?\", \"sessionId\": null}'
 ```
-
-Resultado esperado (exemplo):
+Resultado esperado:
 ```json
 {
   "sessionId": "a1b2c3d4-...",
@@ -156,91 +178,89 @@ Resultado esperado (exemplo):
 }
 ```
 
-> O campo `toolsUsed` mostra quais ferramentas o agente invocou. `iterations` indica quantos ciclos raciocínio→ação o agente executou.
-
-**Manter sessão (memória de conversa):**
-```bash
-# Copie o sessionId da resposta anterior e reutilize
-curl -X POST http://localhost:8765/api/agent/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "E qual foi minha pergunta anterior?",
-    "sessionId": "a1b2c3d4-..."
-  }'
+**Continuar a mesma sessão (memória de conversa):**
+```powershell
+curl -X POST http://localhost:8765/api/agent/chat `
+  -H "Content-Type: application/json" `
+  -d '{\"message\": \"E qual foi minha pergunta anterior?\", \"sessionId\": \"a1b2c3d4-...\"}'
 ```
 
 ---
 
-### 4.4 Verificar telemetria assíncrona no RabbitMQ
+### 4.4 Telemetria no RabbitMQ
 
-Acesse o painel do RabbitMQ: [http://localhost:15672](http://localhost:15672) (login: `guest` / `guest`)
+Acesse [http://localhost:15672](http://localhost:15672) (login: `guest` / `guest`).
 
-Após enviar mensagens ao agent-service, navegue em **Queues → agent.telemetry** e verifique as mensagens recebidas. Cada chamada ao LLM publica uma mensagem com:
-
+Navegue em **Queues → agent.telemetry**. Após enviar mensagens ao agent-service, você verá mensagens como:
 ```json
-{
-  "sessionId": "...",
-  "iteracao": 1,
-  "duracaoMs": 1250,
-  "finishReason": "stop",
-  "timestamp": "2026-06-30T14:35:22Z"
-}
+{"sessionId": "...", "iteracao": 1, "duracaoMs": 1250, "finishReason": "stop", "timestamp": "..."}
 ```
 
 ---
 
-## 5. Parar os containers
+## Parar os containers
 
-```bash
-# Para e remove containers (preserva volumes)
+```powershell
+# Na pasta trabalhoESII/
+# Para e remove os containers (mantém o volume com o modelo Ollama)
 docker compose down
 
-# Para, remove containers E volumes (limpa modelo Ollama baixado)
+# Para, remove containers E o modelo baixado (precisa baixar de novo)
 docker compose down -v
 ```
 
 ---
 
-## 6. Troubleshooting
+## Troubleshooting
 
-### llm-gateway demora para responder na primeira chamada
-Normal — o Ollama precisa carregar o modelo em VRAM/RAM. Aguarde até 60 segundos na primeira requisição.
+### `ollama` nunca fica healthy / agent-service não sobe
+O modelo não foi baixado ainda. Execute o Passo 1 novamente.
 
-### `service_healthy` nunca passa para o ollama
-O healthcheck do Ollama usa `ollama list`. Se o container não tiver o modelo baixado, pode retornar erro. Execute o passo 1 novamente.
+### `llm-gateway` falha no build: `No matching distribution found for py-eureka-client==0.11.14`
+Versão inexistente no PyPI. Edite `llm-gateway/requirements.txt` e troque por `py-eureka-client==0.11.13`. *(Já corrigido se você atualizou o repositório.)*
 
 ### agent-service não encontra o llm-gateway
-Verifique se o `llm-gateway` está registrado no Eureka em [http://localhost:8761](http://localhost:8761). O Feign Client do agent-service usa service discovery — se o llm-gateway não aparecer no Eureka, a chamada falha.
+Verifique o Eureka em [http://localhost:8761](http://localhost:8761). O `llm-gateway` precisa aparecer na lista de serviços registrados. Se não aparecer, veja os logs:
+```powershell
+docker compose logs -f llm-gateway
+```
 
 ### Ver logs de um serviço específico
-```bash
+```powershell
+# Todos os logs ao vivo
+docker compose logs -f
+
+# Logs de um serviço específico
+docker compose logs -f naming-server
 docker compose logs -f llm-gateway
 docker compose logs -f agent-service
-docker compose logs -f naming-server
+```
+
+### Erro de porta já em uso
+Algum processo já está usando a porta. Identifique e encerre:
+```powershell
+netstat -ano | findstr :8761
+netstat -ano | findstr :8767
+netstat -ano | findstr :8765
 ```
 
 ---
 
-## 7. Resumo da comunicação entre serviços
+## Resumo do fluxo de comunicação
 
 ```
-curl (usuário)
+Você (curl)
     │  POST /api/agent/chat
     ▼
-agent-service (8765)
-    │  Feign Client → Eureka descobre "llm-gateway"
+agent-service :8765
+    │  Feign → descobre "llm-gateway" via Eureka (:8761)
     │  POST /api/llm/chat
     ▼
-llm-gateway (8767)
+llm-gateway :8767
     │  LiteLLM → Ollama API
     │  POST http://ollama:11434/api/chat
     ▼
-ollama (11434) → llama3.2
-    │  resposta LLM
-    ▲
-llm-gateway → LlmChatResponse
-    ▲
-agent-service → ciclo ReAct → AgentResponse
-    ▲
-curl (usuário) recebe resposta final
+ollama :11434  →  llama3.2
+    │
+    └─ resposta sobe pela cadeia até você
 ```

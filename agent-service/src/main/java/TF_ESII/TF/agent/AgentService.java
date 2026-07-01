@@ -69,7 +69,7 @@ public class AgentService {
             long inicio = Instant.now().toEpochMilli();
 
             LlmChatResponse respostaLLM = llmGatewayClient.chat(
-                new LlmChatRequest(historico, List.of("buscarNaBaseDeConhecimento", "obterDataHoraAtual"))
+                new LlmChatRequest(historico, null)
             );
 
             long duracaoMs = Instant.now().toEpochMilli() - inicio;
