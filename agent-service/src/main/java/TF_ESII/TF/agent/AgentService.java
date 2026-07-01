@@ -38,10 +38,7 @@ public class AgentService {
     private final AgentTools agentTools;
     private final RabbitTemplate rabbitTemplate;
 
-    public AgentService(LlmGatewayClient llmGatewayClient,
-                        MemoryServiceClient memoryServiceClient,
-                        AgentTools agentTools,
-                        RabbitTemplate rabbitTemplate) {
+    public AgentService(LlmGatewayClient llmGatewayClient, MemoryServiceClient memoryServiceClient, AgentTools agentTools, RabbitTemplate rabbitTemplate) {
         this.llmGatewayClient = llmGatewayClient;
         this.memoryServiceClient = memoryServiceClient;
         this.agentTools = agentTools;
@@ -67,18 +64,10 @@ public class AgentService {
         List<String> ferramentasUsadas = new ArrayList<>();
         int iteracao = 0;
 
-        // ================================================================
-        // CICLO AGÊNTICO — Abordagem B (ReAct Manual)
-        // Fluxo a cada iteração:
-        //   REASONING → envia histórico ao llm-gateway via Feign
-        //   ACTION    → executa tool solicitada pelo LLM
-        //   OBSERVATION → adiciona resultado ao histórico e repete
-        // ================================================================
         while (iteracao < MAX_ITERACOES) {
             iteracao++;
             long inicio = Instant.now().toEpochMilli();
 
-            // ── REASONING ────────────────────────────────────────────
             LlmChatResponse respostaLLM = llmGatewayClient.chat(
                 new LlmChatRequest(historico, List.of("buscarNaBaseDeConhecimento", "obterDataHoraAtual"))
             );
@@ -86,7 +75,6 @@ public class AgentService {
             long duracaoMs = Instant.now().toEpochMilli() - inicio;
             publicarTelemetria(request.sessionId(), iteracao, duracaoMs, respostaLLM.finishReason());
 
-            // ── Sem tool calls → resposta final do ciclo ─────────────
             if (respostaLLM.toolCalls() == null || respostaLLM.toolCalls().isEmpty()) {
                 LlmMessage resposta = new LlmMessage("assistant", respostaLLM.content());
                 historico.add(resposta);
@@ -100,7 +88,6 @@ public class AgentService {
                 );
             }
 
-            // ── ACTION ───────────────────────────────────────────────
             String toolCallsDesc = respostaLLM.toolCalls().stream()
                 .map(tc -> tc.name() + "(" + tc.arguments() + ")")
                 .reduce((a, b) -> a + ", " + b).orElse("");
@@ -109,12 +96,9 @@ public class AgentService {
             for (var toolCall : respostaLLM.toolCalls()) {
                 ferramentasUsadas.add(toolCall.name());
 
-                // ── OBSERVATION ──────────────────────────────────────
                 String resultado = executarFerramenta(toolCall.name(), toolCall.arguments());
 
-                LlmMessage observacao = new LlmMessage("tool",
-                    "id=" + toolCall.id() + " name=" + toolCall.name() + " result=" + resultado
-                );
+                LlmMessage observacao = new LlmMessage("tool", "id=" + toolCall.id() + " name=" + toolCall.name() + " result=" + resultado);
                 historico.add(observacao);
                 salvarMensagem(request.sessionId(), observacao);
             }

@@ -1,11 +1,99 @@
 services:
- rabbitmq:
- image: rabbitmq:management
- ports:
- - "5672:5672"
- - "15672:15672"
- environment:
- - RABBITMQ_DEFAULT_USER=engsoft2
- - RABBITMQ_DEFAULT_PASS=engsoft2
- networks:
- - currency-network
+
+  # ── Infraestrutura ───────────────────────────────────────────────────────────
+
+  naming-server:
+    build: ./naming-server
+    ports:
+      - "8761:8761"
+    networks:
+      - plataforma-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - plataforma-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── LLM ──────────────────────────────────────────────────────────────────────
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - plataforma-network
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  llm-gateway:
+    build: ./llm-gateway
+    ports:
+      - "8767:8767"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: ollama/llama3.2
+      EUREKA_SERVER: http://naming-server:8761/eureka
+      INSTANCE_HOST: llm-gateway
+      PORT: "8767"
+    networks:
+      - plataforma-network
+    depends_on:
+      naming-server:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8767/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Aplicação ─────────────────────────────────────────────────────────────────
+
+  agent-service:
+    build: ./agent-service
+    ports:
+      - "8765:8765"
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://naming-server:8761/eureka
+    networks:
+      - plataforma-network
+    depends_on:
+      naming-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+
+networks:
+  plataforma-network:
+    driver: bridge
+
+volumes:
+  ollama_data:
