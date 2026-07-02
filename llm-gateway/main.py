@@ -1,24 +1,22 @@
-import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
-from urllib import request
 
-import litellm
 from fastapi import FastAPI, HTTPException
+from ollama import AsyncClient
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LLM_MODEL      = os.getenv("LLM_MODEL", "ollama/llama3.2")
-EUREKA_SERVER  = os.getenv("EUREKA_SERVER", "http://localhost:8761/eureka")
-INSTANCE_HOST  = os.getenv("INSTANCE_HOST", "localhost")
-INSTANCE_PORT  = int(os.getenv("PORT", "8767"))
+LLM_MODEL       = os.getenv("LLM_MODEL", "qwen3.5")
+EUREKA_SERVER   = os.getenv("EUREKA_SERVER", "http://localhost:8761/eureka")
+INSTANCE_HOST   = os.getenv("INSTANCE_HOST", "localhost")
+INSTANCE_PORT   = int(os.getenv("PORT", "8767"))
 
-litellm.set_verbose = False
+ollama_client = AsyncClient(host=OLLAMA_BASE_URL)
 
 
 # ── Eureka registration (graceful degradation if lib not present) ────────────
@@ -62,22 +60,8 @@ class LlmMessage(BaseModel):
 
 class LlmChatRequest(BaseModel):
     messages: List[LlmMessage]
-    #availableTools: List[str] = []
-    availableTools: Optional[List[dict]] = None
+    availableTools: List[str] = []
 
-    # try: 
-    #     kwarg = {
-    #         "model": LLM_MODEL,
-    #         "message": messages,
-    #         "api_base": OLLAMA_BASE_URL,
-    #         "timeout": 120,
-    #     }
-
-    #     if request.availableTools:
-    #         kwarg["available_tools"] = request.availableTools
-        
-    #     response = await litellm.acompletion(**kwarg)
-        
 
 class ToolCall(BaseModel):
     id: str
@@ -95,34 +79,31 @@ class LlmChatResponse(BaseModel):
 @app.post("/api/llm/chat", response_model=LlmChatResponse)
 async def chat(request: LlmChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    logger.info("chat called — %d messages, tools=%s", len(messages), request.availableTools)
+    logger.info("chat — %d messages, tools=%s", len(messages), request.availableTools)
 
     try:
-        response = await litellm.acompletion(
+        response = await ollama_client.chat(
             model=LLM_MODEL,
             messages=messages,
-            api_base=OLLAMA_BASE_URL,
-            timeout=120,
         )
     except Exception as exc:
-        logger.error("LLM call failed: %s", exc)
+        logger.error("Ollama call failed: %s", exc)
         raise HTTPException(status_code=503, detail=f"LLM unavailable: {exc}")
 
-    choice = response.choices[0]
-    content = choice.message.content or ""
-    finish_reason = choice.finish_reason
+    content = response.message.content or ""
+    finish_reason = "stop"
 
     tool_calls: List[ToolCall] = []
-    raw_tool_calls = getattr(choice.message, "tool_calls", None)
+    raw_tool_calls = getattr(response.message, "tool_calls", None)
     if raw_tool_calls:
         for tc in raw_tool_calls:
             tool_calls.append(ToolCall(
-                id=tc.id or "",
+                id="",
                 name=tc.function.name,
-                arguments=tc.function.arguments or "{}",
+                arguments=str(tc.function.arguments or "{}"),
             ))
 
-    logger.info("Response: finish_reason=%s, tool_calls=%d", finish_reason, len(tool_calls))
+    logger.info("Response: content_len=%d, tool_calls=%d", len(content), len(tool_calls))
     return LlmChatResponse(content=content, toolCalls=tool_calls, finishReason=finish_reason)
 
 

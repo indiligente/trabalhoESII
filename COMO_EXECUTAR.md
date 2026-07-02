@@ -34,43 +34,13 @@ trabalhoESII/              ← RAIZ DO PROJETO — rode o compose principal aqui
 
 ---
 
-## Passo 1 — Baixar o modelo de linguagem (só na primeira vez)
-
-> **Por que fazer isso antes?** O Ollama precisa ter o modelo em disco antes de responder ao healthcheck do `compose.yaml`. Se o modelo não estiver baixado, o container `ollama` nunca ficará "healthy" e os outros serviços não sobem.
-
-Execute os 4 comandos abaixo **na ordem**, a partir de **qualquer pasta**:
-
-```powershell
-# 1. Sobe um container Ollama temporário com o volume persistente
-docker run -d --name ollama-setup -v ollama_data:/root/.ollama ollama/ollama
-
-# 2. Aguarda o servidor Ollama estar pronto (fica esperando até responder)
-docker exec ollama-setup sh -c "until ollama list > /dev/null 2>&1; do sleep 1; done && echo Servidor pronto"
-
-# 3. Baixa o modelo (≈2 GB — pode levar alguns minutos)
-docker exec ollama-setup ollama pull llama3.2
-
-# 4. Remove o container temporário (o volume ollama_data fica salvo no Docker)
-docker stop ollama-setup && docker rm ollama-setup
-```
-
-Quando o passo 3 terminar você verá algo como:
-```
-pulling manifest
-pulling 966de95ca8a6... 100% ██████████ 2.0 GB
-success
-```
-
----
-
-## Passo 2 — Subir toda a plataforma
+## Passo 1 — Subir toda a plataforma
 
 > **Pasta obrigatória:** `trabalhoESII/` (onde está o `compose.yaml`)
 
-```powershell
-# Navegue até a raiz do projeto
-cd C:\Users\manue\Documents\Faculdade\EngenhariaSoftwareII\trabalhoESII
+O modelo `qwen3.5` é baixado automaticamente pelo serviço `ollama-pull` na primeira execução — não é necessário nenhum passo manual antes.
 
+```powershell
 # Constrói as imagens e sobe todos os containers
 docker compose up --build
 ```
@@ -79,6 +49,11 @@ Para rodar em background (libera o terminal):
 ```powershell
 docker compose up --build -d
 ```
+
+> **Na primeira execução**, o `ollama-pull` vai baixar o modelo (~2 GB). Acompanhe o progresso com:
+> ```powershell
+> docker compose logs -f ollama-pull
+> ```
 
 ### Ordem de inicialização automática
 
@@ -89,14 +64,16 @@ naming-server (8761)
       │
       ├── rabbitmq (5672)
       │
-      └── ollama (11434)  ← precisa do modelo baixado no Passo 1
+      └── ollama (11434)
+              │
+          ollama-pull  ← baixa qwen3.5 automaticamente (só na 1ª vez)
               │
           llm-gateway (8767)
                   │
             agent-service (8765)
 ```
 
-Na primeira vez, aguarde **3–5 minutos** até todos ficarem "healthy".
+Na primeira execução, aguarde **5–10 minutos** (inclui o download do modelo). Nas próximas, **2–3 minutos**.
 
 ---
 
@@ -137,7 +114,7 @@ curl http://localhost:8767/health
 ```
 Resultado esperado:
 ```json
-{"status": "UP", "service": "llm-gateway", "model": "ollama/llama3.2", "ollamaBase": "http://ollama:11434"}
+{"status": "UP", "service": "llm-gateway", "model": "qwen3.5", "ollamaBase": "http://ollama:11434"}
 ```
 
 **Teste de chat direto (sem passar pelo agent-service):**
@@ -213,8 +190,13 @@ docker compose down -v
 
 ## Troubleshooting
 
-### `ollama` nunca fica healthy / agent-service não sobe
-O modelo não foi baixado ainda. Execute o Passo 1 novamente.
+### `ollama` nunca fica healthy / `ollama-pull` falha
+O download do modelo falhou. Force o re-download com:
+```powershell
+docker compose up ollama -d
+docker compose logs -f ollama-pull
+```
+Se o pull falhar por nome de modelo incorreto, verifique o nome em [https://ollama.com/library](https://ollama.com/library) e atualize `LLM_MODEL` no `compose.yaml`.
 
 ### `llm-gateway` falha no build: `No matching distribution found for py-eureka-client==0.11.14`
 Versão inexistente no PyPI. Edite `llm-gateway/requirements.txt` e troque por `py-eureka-client==0.11.13`. *(Já corrigido se você atualizou o repositório.)*
@@ -260,7 +242,7 @@ llm-gateway :8767
     │  LiteLLM → Ollama API
     │  POST http://ollama:11434/api/chat
     ▼
-ollama :11434  →  llama3.2
+ollama :11434  →  qwen3.5
     │
     └─ resposta sobe pela cadeia até você
 ```

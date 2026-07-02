@@ -19,7 +19,7 @@ services:
       - "8767:8767"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: ollama/llama3.2
+      LLM_MODEL: qwen3.5
       EUREKA_SERVER: http://host.docker.internal:8761/eureka
       INSTANCE_HOST: llm-gateway
       PORT: "8767"

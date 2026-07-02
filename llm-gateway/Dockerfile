@@ -11,7 +11,7 @@ EXPOSE 8767
 
 ENV PORT=8767 \
     OLLAMA_BASE_URL=http://ollama:11434 \
-    LLM_MODEL=ollama/llama3.2 \
+    LLM_MODEL=qwen3.5 \
     EUREKA_SERVER=http://naming-server:8761/eureka \
     INSTANCE_HOST=llm-gateway
 
