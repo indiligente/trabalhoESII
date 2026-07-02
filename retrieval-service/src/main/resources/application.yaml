@@ -1,12 +1,4 @@
 server:
-<<<<<<< HEAD:naming-server/target/classes/application.yaml
-  port: 8761
-
-spring:
-  application:
-    name: naming-server
-
-=======
  port: 8766
 spring:
  application:
