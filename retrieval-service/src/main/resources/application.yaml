@@ -1,17 +1,26 @@
 server:
+<<<<<<< HEAD:naming-server/target/classes/application.yaml
   port: 8761
 
 spring:
-<<<<<<< HEAD
   application:
     name: naming-server
 
 =======
+ port: 8766
+spring:
  application:
- name: naming-server
+ name: retrieval-service
  cloud:
  gateway.server.webflux:
  discovery:
+ ai:
+  vectorstore:
+    qdrant:
+      host: ${QDRANT_HOST:localhost}
+      port: ${QDRANT_PORT:6334}
+      collection-name: documentos_ia
+      api-token: ""
  locator:
  enabled: true
  lower-case-service-id: true
@@ -23,7 +32,7 @@ management:
  web:
  exposure:
  include:
->>>>>>> main
+>>>>>>> main:retrieval-service/src/main/resources/application.yaml
 eureka:
   instance:
     hostname: localhost

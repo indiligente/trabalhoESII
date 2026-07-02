@@ -9,23 +9,33 @@
 		<relativePath/>
 	</parent>
 	<groupId>TF_ESII</groupId>
-	<artifactId>naming-server</artifactId>
+	<artifactId>retrieval-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<name/>
+	<description/>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<spring-ai.version>2.0.0-M8</spring-ai.version>
 		<spring-cloud.version>2025.1.1</spring-cloud.version>
 	</properties>
 	<dependencies>
 		<dependency>
-<<<<<<< HEAD
-=======
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-session-data-redis</artifactId>
 		</dependency>
-		<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-	</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-advisors-vector-store</artifactId>
@@ -39,17 +49,8 @@
 			<artifactId>spring-ai-starter-vector-store-qdrant</artifactId>
 		</dependency>
 		<dependency>
->>>>>>> main
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
+			<artifactId>spring-boot-starter-session-data-redis-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -62,8 +63,16 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<dependency>
+				<groupId>org.springframework.ai</groupId>
+				<artifactId>spring-ai-bom</artifactId>
+				<version>${spring-ai.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
+
 	<build>
 		<plugins>
 			<plugin>
@@ -72,4 +81,5 @@
 			</plugin>
 		</plugins>
 	</build>
+
 </project>
