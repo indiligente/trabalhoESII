@@ -15,4 +15,4 @@ ENV PORT=8767 \
     EUREKA_SERVER=http://naming-server:8761/eureka \
     INSTANCE_HOST=llm-gateway
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8767"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8767"]

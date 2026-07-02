@@ -1,18 +1,21 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.chat_schemas import LlmChatRequest, LlmChatResponse
-from app.services.ollama_proxy import ollama_service 
+from app.services.ollama import ollama_service 
+import pybreaker
 
 router = APIRouter()
 
 @router.post("/chat", response_model=LlmChatResponse)
 async def chat(request: LlmChatRequest):
     try:
-        # A lógica de chamada ao Ollama virá aqui através do serviço
-        # response = await ollama_service.chat(request.messages)
-        # return response
+        response = await ollama_service.chat(request.messages)
+
+        return LlmChatResponse(
+            content=response.message.content,
+        finishReason="stop"
+        )
         
-        # Exemplo temporário para testar a rota:
-        return LlmChatResponse(content="Gateway funcional", finishReason="stop")
-        
+    except pybreaker.CircuitBreakerError:
+        raise HTTPException(status_code=503, detail="Ollama está indisponível (Circuit Breaker aberto)")
     except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))

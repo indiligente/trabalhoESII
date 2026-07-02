@@ -12,7 +12,6 @@ class OllamaService:
 
     @breaker
     async def chat(self, messages):
-        # Transforma o schema em formato esperado pelo Ollama
         formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
         
         return await self.client.chat(
@@ -20,5 +19,4 @@ class OllamaService:
             messages=formatted_messages
         )
 
-# Instância única para reutilizar em toda a app
 ollama_service = OllamaService()

@@ -4,8 +4,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    env_file:
-      - ./rabbitmq/.env
+    #env_file:
+    # - ./rabbitmq/.env
     networks:
       - platform_network
 
@@ -14,8 +14,8 @@ services:
     restart: always
     ports:
       - "5432:5432"
-    env_file:
-      - ./postgres/.env
+    #env_file:
+    # - ./postgres/.env
     networks:
       - platform_network
     volumes:
@@ -49,8 +49,8 @@ services:
     depends_on:
       - postgres
       - redis
-    env_file:
-      - ./service-memory/.env
+    #env_file:
+    # - ./service-memory/.env
     networks:
       - platform_network
 
