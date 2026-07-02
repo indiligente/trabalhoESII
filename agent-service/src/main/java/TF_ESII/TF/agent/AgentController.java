@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import TF_ESII.TF.DTO.AgentRequest;
 import TF_ESII.TF.DTO.AgentResponse;
@@ -16,9 +17,11 @@ import TF_ESII.TF.DTO.AgentResponse;
 public class AgentController {
 
     private final AgentService agentService;
+    private final AgentTools agentTools;
 
-    AgentController(AgentService agentService) {
+    AgentController(AgentService agentService, AgentTools agentTools) {
         this.agentService = agentService;
+        this.agentTools = agentTools;
     }
 
     @PostMapping("/chat")
@@ -39,6 +42,17 @@ public class AgentController {
             "status", "UP",
             "service", "agent-service",
             "timestamp", LocalDateTime.now().toString()
+        ));
+    }
+
+    // Chama a ferramenta de retrieval diretamente, sem passar pelo ciclo ReAct/LLM.
+    // Serve para validar a integração agent-service <-> retrieval-service isoladamente.
+    @GetMapping("/debug/retrieval")
+    public ResponseEntity<Map<String, String>> testarRetrieval(@RequestParam String query) {
+        String resultado = agentTools.buscarNaBaseDeConhecimento(query);
+        return ResponseEntity.ok(Map.of(
+            "query", query,
+            "resultado", resultado
         ));
     }
 }

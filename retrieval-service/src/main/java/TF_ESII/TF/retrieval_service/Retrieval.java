@@ -21,10 +21,10 @@ public class Retrieval {
 		vectorStore.add(List.of(documento));
 	}
 
-	public List<Document> buscarDocumentos(String perguntaUsuario){
+	public List<Document> buscarDocumentos(String perguntaUsuario, int topK){
 		SearchRequest requisicao = SearchRequest.builder()
 			.query(perguntaUsuario)
-			.topK(3)
+			.topK(topK)
 			.similarityThreshold(0.7)
 			.build();
 		return vectorStore.similaritySearch(requisicao);

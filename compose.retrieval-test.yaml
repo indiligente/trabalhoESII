@@ -1,6 +1,14 @@
-services:
+# Stack reduzida para testar SOMENTE agent-service + retrieval-service,
+# sem subir llm-gateway/ollama-pull (modelo de chat qwen3.5).
+#
+# Uso (na raiz do projeto):
+#   docker compose -f compose.retrieval-test.yaml up --build
+#
+# Use o endpoint GET /api/agent/debug/retrieval?query=... do agent-service para
+# validar a comunicação com o retrieval-service sem depender do LLM
+# (veja a seção 4.3 do COMO_EXECUTAR.md).
 
-  # ── Infraestrutura ───────────────────────────────────────────────────────────
+services:
 
   naming-server:
     build: ./naming-server
@@ -31,8 +39,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── LLM ──────────────────────────────────────────────────────────────────────
-
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -47,18 +53,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull", "qwen3.5"]
-    networks:
-      - plataforma-network
-    depends_on:
-      ollama:
-        condition: service_healthy
-    restart: "no"
 
   ollama-pull-embed:
     image: ollama/ollama:latest
@@ -89,30 +83,6 @@ services:
       retries: 5
       start_period: 15s
 
-  llm-gateway:
-    build: ./llm-gateway
-    ports:
-      - "8767:8767"
-    environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: qwen3.5
-      EUREKA_SERVER: http://naming-server:8761/eureka
-      INSTANCE_HOST: llm-gateway
-      PORT: "8767"
-    networks:
-      - plataforma-network
-    depends_on:
-      naming-server:
-        condition: service_healthy
-      ollama-pull:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8767/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
   retrieval-service:
     build: ./retrieval-service
     ports:
@@ -139,8 +109,6 @@ services:
       retries: 5
       start_period: 20s
 
-  # ── Aplicação ─────────────────────────────────────────────────────────────────
-
   agent-service:
     build: ./agent-service
     ports:
@@ -154,8 +122,6 @@ services:
       naming-server:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      llm-gateway:
         condition: service_healthy
       retrieval-service:
         condition: service_healthy
