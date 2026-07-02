@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from ollama import AsyncClient
 from pydantic import BaseModel
 
@@ -105,6 +106,29 @@ async def chat(request: LlmChatRequest):
 
     logger.info("Response: content_len=%d, tool_calls=%d", len(content), len(tool_calls))
     return LlmChatResponse(content=content, toolCalls=tool_calls, finishReason=finish_reason)
+
+
+@app.post("/api/llm/chat/stream")
+async def chat_stream(request: LlmChatRequest):
+    """Retorna a resposta token a token — use para testes manuais via curl."""
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    logger.info("chat/stream — %d messages", len(messages))
+
+    async def generate():
+        try:
+            async for chunk in await ollama_client.chat(
+                model=LLM_MODEL,
+                messages=messages,
+                stream=True,
+            ):
+                content = chunk.message.content
+                if content:
+                    yield content
+        except Exception as exc:
+            logger.error("Streaming failed: %s", exc)
+            yield f"\n[ERRO: {exc}]"
+
+    return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")
 
 
 @app.get("/health")
