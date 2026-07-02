@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+ollama>=0.3.0
+pydantic
+py-eureka-client
+pydantic-settings
+pybreaker

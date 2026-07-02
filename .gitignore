@@ -1,0 +1,40 @@
+# --- Segurança (Crucial) ---
+# Ignora arquivos de ambiente (.env), mas permite .env.example
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+# Virtual environments
+venv/
+env/
+.env/
+venv*/
+env*/
+
+# Bytecode (arquivos compilados)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribuição e builds
+dist/
+build/
+*.egg-info/
+
+# --- IDEs e Editores ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Testes e Cobertura ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Docker / Dados Locais ---
+# Se você tiver pastas de volumes (como db_data ou ollama_data)
+# que são geradas localmente, é bom ignorá-las para não poluir o repo
+db_data/
+ollama_data/

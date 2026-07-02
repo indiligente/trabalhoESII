@@ -1,6 +1,12 @@
 server:
- port: 8765
+  port: 8761
+
 spring:
+<<<<<<< HEAD
+  application:
+    name: naming-server
+
+=======
  application:
  name: naming-server
  cloud:
@@ -17,22 +23,21 @@ management:
  web:
  exposure:
  include:
+>>>>>>> main
 eureka:
- client:
- service-url:
- defaultZone: http://localhost:8761/eureka
-logging:
- level:
- "[org.springframework.cloud.gateway]": TRACE
-resilience4j:
- circuitbreaker:
- configs:
- default:
- register-health-indicator: true
- sliding-window-type: count-based
- sliding-window-size: 10
- failure-rate-threshold: 50
- minimum-number-of-calls: 5
- automatic-transition-from-open-to-half-open-enabled: true
- wait-duration-in-open-state: 5s
- permitted-number-of-calls-in-half-open-state: 3
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always

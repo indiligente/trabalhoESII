@@ -4,9 +4,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    #env_file:
+    # - ./rabbitmq/.env
     networks:
       - platform_network
 
@@ -15,10 +14,8 @@ services:
     restart: always
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+    #env_file:
+    # - ./postgres/.env
     networks:
       - platform_network
     volumes:
@@ -30,6 +27,21 @@ services:
     networks:
       - platform_network
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: [ "CMD-SHELL", "ollama list || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - platform_network
+
   service-memory:
     build: ./service-memory
     ports:
@@ -37,12 +49,20 @@ services:
     depends_on:
       - postgres
       - redis
-    env_file:
-      - ./service-memory/.env
+    #env_file:
+    # - ./service-memory/.env
+    networks:
+      - platform_network
 
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
+  llm-gateway:
+    build: ./llm-gateway
+    ports:
+      - "8767:8767"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    env_file:
+      - ./llm-gateway/.env
     networks:
       - platform_network
 
@@ -52,3 +72,4 @@ networks:
 
 volumes:
   db_data:
+  ollama_data:
