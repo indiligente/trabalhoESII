@@ -1,30 +1,26 @@
 server:
- port: 8766
+  port: 8766
+
 spring:
- application:
- name: retrieval-service
- cloud:
- gateway.server.webflux:
- discovery:
- ai:
-  vectorstore:
-    qdrant:
-      host: ${QDRANT_HOST:localhost}
-      port: ${QDRANT_PORT:6334}
-      collection-name: documentos_ia
-      api-token: ""
- locator:
- enabled: true
- lower-case-service-id: true
-management:
- endpoint:
- health:
- show-details: always
- endpoints:
- web:
- exposure:
- include:
->>>>>>> main:retrieval-service/src/main/resources/application.yaml
+  application:
+    name: retrieval-service
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        model: ${EMBEDDING_MODEL:nomic-embed-text}
+    vectorstore:
+      qdrant:
+        host: ${QDRANT_HOST:localhost}
+        port: ${QDRANT_PORT:6334}
+        collection-name: documentos_ia
+        api-key: ""
+        initialize-schema: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka}
 eureka:
   instance:
     hostname: localhost
@@ -42,3 +38,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+logging:
+  level:
+    TF_ESII.TF: DEBUG

@@ -21,6 +21,9 @@ feign:
       default:
         connectTimeout: 5000
         readTimeout: 30000
+      retrieval-service:
+        connectTimeout: 5000
+        readTimeout: 60000
 
 management:
   endpoints:

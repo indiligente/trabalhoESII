@@ -1,31 +1,43 @@
+# Stack reduzida para testar SOMENTE agent-service + retrieval-service,
+# sem subir llm-gateway/ollama-pull (modelo de chat qwen3.5).
+#
+# Uso (na raiz do projeto):
+#   docker compose -f compose.retrieval-test.yaml up --build
+#
+# Use o endpoint GET /api/agent/debug/retrieval?query=... do agent-service para
+# validar a comunicação com o retrieval-service sem depender do LLM
+# (veja a seção 4.3 do COMO_EXECUTAR.md).
+
 services:
+
+  naming-server:
+    build: ./naming-server
+    ports:
+      - "8761:8761"
+    networks:
+      - plataforma-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3-management-alpine
     ports:
       - "5672:5672"
       - "15672:15672"
-    #env_file:
-    # - ./rabbitmq/.env
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     networks:
-      - platform_network
-
-  postgres:
-    image: postgres:14-alpine
-    restart: always
-    ports:
-      - "5432:5432"
-    #env_file:
-    # - ./postgres/.env
-    networks:
-      - platform_network
-    volumes:
-      - db_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    restart: always
-    networks:
-      - platform_network
+      - plataforma-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   ollama:
     image: ollama/ollama:latest
@@ -33,26 +45,14 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - plataforma-network
     healthcheck:
-      test: [ "CMD-SHELL", "ollama list || exit 1" ]
+      test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 20s
-    networks:
-      - platform_network
-
-  service-memory:
-    build: ./service-memory
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-      - redis
-    #env_file:
-    # - ./service-memory/.env
-    networks:
-      - platform_network
 
   ollama-pull-embed:
     image: ollama/ollama:latest
@@ -83,22 +83,6 @@ services:
       retries: 5
       start_period: 15s
 
-  llm-gateway:
-    build: ./llm-gateway
-    ports:
-      - "8767:8767"
-    depends_on:
-      ollama:
-        condition: service_healthy
-      ollama-pull:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8767/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
   retrieval-service:
     build: ./retrieval-service
     ports:
@@ -125,8 +109,6 @@ services:
       retries: 5
       start_period: 20s
 
-  # ── Aplicação ─────────────────────────────────────────────────────────────────
-
   agent-service:
     build: ./agent-service
     ports:
@@ -141,16 +123,13 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      llm-gateway:
-        condition: service_healthy
       retrieval-service:
         condition: service_healthy
 
 networks:
-  platform_network:
+  plataforma-network:
     driver: bridge
 
 volumes:
-  db_data:
   ollama_data:
   qdrant_data:
