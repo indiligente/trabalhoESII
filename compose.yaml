@@ -7,6 +7,37 @@ services:
     networks:
       - platform_network
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - platform_network
+    depends_on:
+      - api-gateway
+      - agent-service
+      - retrieval-service
+      - tool-registry
+      - naming-server
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - platform_network
+    depends_on:
+      - prometheus
+
   postgres:
     image: postgres:14-alpine
     ports:
@@ -197,3 +228,4 @@ volumes:
   db_data:
   ollama_data:
   qdrant_data:
+  grafana_data:

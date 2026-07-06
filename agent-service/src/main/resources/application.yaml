@@ -28,6 +28,10 @@ feign:
         readTimeout: 60000
 
 management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   endpoints:
     web:
       exposure:

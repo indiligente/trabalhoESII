@@ -1,7 +1,7 @@
 # Status Completo do Projeto - trabalhoESII
 
-> **Data:** 06/07/2026 - 19:55  
-> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway e fluxo inicial do agente via gateway ja foram validados.
+> **Data:** 06/07/2026 - 20:25  
+> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway, RabbitMQ e observabilidade com Prometheus/Grafana ja foram implementados.
 
 ---
 
@@ -11,14 +11,14 @@ O projeto deve entregar uma plataforma de microsservicos distribuida para agente
 
 | Requisito | Situacao atual |
 |:---|:---:|
-| Arquitetura de microsservicos | ✅ |
-| Comunicacao sincrona REST/Feign | ✅ |
-| Comunicacao assincrona RabbitMQ | ✅ Implementada |
-| Resiliencia / Circuit Breaker | ⚠️ Parcial |
-| Service Discovery com Eureka | ✅ |
-| API Gateway | ✅ |
-| Observabilidade | ⚠️ Parcial |
-| Docker Compose | ✅ |
+| Arquitetura de microsservicos | OK |
+| Comunicacao sincrona REST/Feign | OK |
+| Comunicacao assincrona RabbitMQ | OK |
+| Resiliencia / Circuit Breaker | Parcial |
+| Service Discovery com Eureka | OK |
+| API Gateway | OK |
+| Observabilidade | OK |
+| Docker Compose | OK |
 
 ---
 
@@ -26,26 +26,26 @@ O projeto deve entregar uma plataforma de microsservicos distribuida para agente
 
 | Servico | Porta externa | Status | Observacao |
 |:---|:---:|:---:|:---|
-| `api-gateway` | 8080 | ✅ Validado | Roteia `/agent-service/**`, `/retrieval-service/**`, `/tool-registry/**`, `/llm-gateway/**` e `/service-memory/**`. |
-| `naming-server` / Eureka | 8761 | ✅ Validado | `API-GATEWAY`, `AGENT-SERVICE`, `RETRIEVAL-SERVICE` e `TOOL-REGISTRY` aparecem como `UP`. |
-| `agent-service` | 8765 | ✅ Validado | Responde via gateway e executa chamada real ao LLM. |
-| `llm-gateway` | 8767 | ✅ Validado | Integra com Ollama e retorna resposta para o agente. |
-| `retrieval-service` | 8766 | ⏳ A validar via gateway | Health, indexacao e busca precisam ser retestados passando pelo API Gateway. |
-| `tool-registry` | 8082 -> 8400 | ⏳ A validar via gateway | Listagem e execucao de ferramenta precisam ser retestadas passando pelo API Gateway. |
-| `service-memory` | 8000 | ⏳ A validar | Ja possui rotas `/api/memory/{sessionId}`, mas falta validar persistencia real com o agente. |
-| RabbitMQ | 5672 / 15672 | ✅ Implementado | O agente publica telemetria em `agent.telemetry` e possui consumidor com `@RabbitListener`. |
-| Qdrant | 6333 / 6334 | ✅ Usado pelo RAG | Banco vetorial do `retrieval-service`. |
-| Ollama | 11434 | ✅ Usado pelo LLM/RAG | Modelos `qwen2.5:3b` e `nomic-embed-text`. |
-| PostgreSQL | 5432 | ⏳ A validar com memoria | Banco do `service-memory`. |
-| Redis | 6379 | ⏳ A validar com memoria | Cache do `service-memory`. |
+| `api-gateway` | 8080 | Validado | Roteia `/agent-service/**`, `/retrieval-service/**`, `/tool-registry/**`, `/llm-gateway/**` e `/service-memory/**`. |
+| `naming-server` / Eureka | 8761 | Validado | Registra os servicos Spring principais. |
+| `agent-service` | 8765 | Validado | Responde via gateway, chama LLM e publica telemetria. |
+| `llm-gateway` | 8767 | Validado | Integra com Ollama e retorna resposta para o agente. |
+| `retrieval-service` | 8766 | A validar via gateway | Health, indexacao e busca precisam ser retestados pelo API Gateway. |
+| `tool-registry` | 8082 -> 8400 | A validar via gateway | Listagem e execucao de ferramenta precisam ser retestadas pelo API Gateway. |
+| `service-memory` | 8000 | A validar | Rotas existem, mas ainda falta validar persistencia real com o agente. |
+| RabbitMQ | 5672 / 15672 | Validado | O agente publica em `agent.telemetry` e consome com `@RabbitListener`. |
+| Prometheus | 9090 | Implementado | Coleta `/actuator/prometheus` dos servicos Spring. |
+| Grafana | 3000 | Implementado | Provisionado com datasource Prometheus. |
+| Qdrant | 6333 / 6334 | Usado pelo RAG | Banco vetorial do `retrieval-service`. |
+| Ollama | 11434 | Usado pelo LLM/RAG | Modelos `qwen2.5:3b` e `nomic-embed-text`. |
+| PostgreSQL | 5432 | A validar com memoria | Banco do `service-memory`. |
+| Redis | 6379 | A validar com memoria | Cache do `service-memory`. |
 
 ---
 
 ## 3. Validacoes Ja Feitas
 
 ### Eureka
-
-Comando:
 
 ```bash
 curl http://localhost:8761/eureka/apps
@@ -59,8 +59,6 @@ Resultado observado:
 - `TOOL-REGISTRY` registrado e `UP`
 
 ### API Gateway -> Agent Service -> LLM
-
-Comando validado:
 
 ```bash
 curl -i -X POST http://localhost:8080/agent-service/api/agent/nova-sessao \
@@ -76,7 +74,49 @@ Resultado observado:
 - `toolsUsed: []`
 - `iterations: 1`
 
-Conclusao: o gateway removeu corretamente o prefixo `/agent-service`, encaminhou para `/api/agent/nova-sessao`, o agente chamou o LLM e retornou resposta ao cliente.
+### RabbitMQ
+
+O `agent-service` publica metricas na fila `agent.telemetry` e tambem possui consumidor:
+
+- fila duravel declarada no `agent-service`;
+- serializacao JSON configurada;
+- consumo com `@RabbitListener`;
+- log validado: `Telemetry event received`.
+
+### Observabilidade
+
+Foi adicionada observabilidade com:
+
+- Prometheus no `compose.yaml`;
+- Grafana no `compose.yaml`;
+- `observability/prometheus.yml`;
+- datasource Prometheus em `observability/grafana/provisioning/datasources/prometheus.yml`;
+- dependencia `micrometer-registry-prometheus` nos servicos Spring;
+- exposicao de `/actuator/prometheus`.
+
+Comandos de verificacao:
+
+```bash
+curl http://localhost:8080/actuator/prometheus
+curl http://localhost:8765/actuator/prometheus
+curl http://localhost:8766/actuator/prometheus
+curl http://localhost:8082/actuator/prometheus
+curl http://localhost:8761/actuator/prometheus
+```
+
+Painel de targets:
+
+```text
+http://localhost:9090/targets
+```
+
+Grafana:
+
+```text
+http://localhost:3000
+usuario: admin
+senha: admin
+```
 
 ---
 
@@ -115,7 +155,7 @@ Por que e necessario:
 
 - comprova que o catalogo de ferramentas esta exposto pelo ponto unico de entrada;
 - valida que ferramentas remotas podem ser listadas e executadas sem acessar a porta interna do servico diretamente;
-- prepara o fluxo agêntico em que o LLM escolhe uma ferramenta e o `agent-service` executa no `tool-registry`;
+- prepara o fluxo agentico em que o LLM escolhe uma ferramenta e o `agent-service` executa no `tool-registry`;
 - ajuda a demonstrar comunicacao sincrona entre microsservicos.
 
 Comandos:
@@ -136,15 +176,6 @@ curl -X POST http://localhost:8080/tool-registry/tools/calculator/execute \
 
 ### Fluxo RAG completo via Gateway
 
-Objetivo: provar o caminho completo:
-
-```text
-Cliente -> API Gateway -> Agent Service -> LLM Gateway -> Tool call local
-        -> Retrieval Service -> Qdrant -> Agent Service -> LLM Gateway -> resposta
-```
-
-Comando:
-
 ```bash
 curl -X POST http://localhost:8080/agent-service/api/agent/chat \
   -H "Content-Type: application/json" \
@@ -158,15 +189,6 @@ Resultado esperado:
 - mais de uma iteracao quando houver chamada de ferramenta.
 
 ### Fluxo de ferramenta remota via Tool Registry
-
-Objetivo: provar o caminho:
-
-```text
-Cliente -> API Gateway -> Agent Service -> LLM Gateway
-        -> Tool Registry -> ferramenta calculator -> Agent Service -> resposta
-```
-
-Comando:
 
 ```bash
 curl -X POST http://localhost:8080/agent-service/api/agent/chat \
@@ -184,13 +206,6 @@ Resultado esperado:
 ## 6. Pendencias Funcionais
 
 ### 6.1 `service-memory`
-
-Estado atual:
-
-- o `agent-service` chama `GET /api/memory/{sessionId}` e `POST /api/memory/{sessionId}`;
-- o `service-memory` ja expoe essas rotas;
-- o compose executa `alembic upgrade head` antes de subir o FastAPI;
-- o `MemoryServiceClient` ja usa `MEMORY_SERVICE_URL`.
 
 O que falta validar:
 
@@ -215,36 +230,29 @@ curl -X POST http://localhost:8080/service-memory/api/memory/session-teste \
 curl http://localhost:8080/service-memory/api/memory/session-teste
 ```
 
-### 6.2 Consumidor RabbitMQ
-
-Estado atual:
-
-- o `agent-service` publica metricas na fila `agent.telemetry`;
-- existe um consumidor `@RabbitListener` para `agent.telemetry`;
-- a fila e declarada como duravel pelo `agent-service`;
-- as mensagens sao serializadas como JSON e logadas no console do servico.
-
-O que falta validar:
-
-- rebuildar o `agent-service`;
-- fazer uma chamada ao agente;
-- verificar nos logs a linha `Telemetry event received`.
-
 ---
 
 ## 7. Roteiro Priorizado
 
-1. Validar `retrieval-service` via gateway.
-2. Validar `tool-registry` via gateway.
-3. Validar RAG completo via gateway.
-4. Validar calculadora remota via agente.
-5. Validar ou ajustar `service-memory`.
-6. Adicionar Prometheus/Grafana para observabilidade.
-7. Atualizar `COMO_EXECUTAR.md` com os comandos novos via gateway.
+1. Subir/rebuildar a stack com observabilidade.
+2. Validar Prometheus em `http://localhost:9090/targets`.
+3. Validar Grafana em `http://localhost:3000`.
+4. Validar `retrieval-service` via gateway.
+5. Validar `tool-registry` via gateway.
+6. Validar RAG completo via gateway.
+7. Validar calculadora remota via agente.
+8. Validar ou ajustar `service-memory`.
+9. Atualizar `COMO_EXECUTAR.md` com os comandos finais de demonstracao.
 
 ---
 
 ## 8. Comandos de Apoio
+
+Rebuild dos servicos Spring e observabilidade:
+
+```bash
+docker compose up -d --build naming-server api-gateway agent-service retrieval-service tool-registry prometheus grafana
+```
 
 Ver containers:
 
@@ -268,6 +276,12 @@ Logs de telemetria:
 
 ```bash
 docker compose logs -f --tail=200 rabbitmq agent-service
+```
+
+Logs de observabilidade:
+
+```bash
+docker compose logs -f --tail=200 prometheus grafana
 ```
 
 Painel RabbitMQ:

@@ -51,6 +51,10 @@ eureka:
     prefer-ip-address: true
 
 management:
+  prometheus:
+    metrics:
+      export:
+        enabled: true
   endpoints:
     web:
       exposure:
