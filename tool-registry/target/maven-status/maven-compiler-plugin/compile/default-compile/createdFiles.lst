@@ -1,0 +1,10 @@
+TF_ESII\tool_registry\tools\CalculatorTool.class
+TF_ESII\tool_registry\service\ToolExecutorService.class
+TF_ESII\tool_registry\controller\ToolController.class
+TF_ESII\tool_registry\model\ToolInvocationRequest.class
+TF_ESII\tool_registry\ToolRegistryApplication.class
+TF_ESII\tool_registry\config\BuiltInToolsInitializer.class
+TF_ESII\tool_registry\repository\ToolRepository.class
+TF_ESII\tool_registry\model\Tool.class
+TF_ESII\tool_registry\service\ToolService.class
+TF_ESII\tool_registry\tools\DatabaseQueryTool.class
