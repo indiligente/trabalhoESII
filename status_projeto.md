@@ -1,7 +1,7 @@
 # Status Completo do Projeto - trabalhoESII
 
-> **Data:** 06/07/2026 - 20:40  
-> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway, RabbitMQ, Circuit Breaker e observabilidade com Prometheus/Grafana ja foram implementados.
+> **Data:** 06/07/2026 - 20:55  
+> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway, RabbitMQ, Circuit Breaker, service-memory e observabilidade com Prometheus/Grafana ja foram implementados.
 
 ---
 
@@ -32,14 +32,14 @@ O projeto deve entregar uma plataforma de microsservicos distribuida para agente
 | `llm-gateway` | 8767 | Validado | Integra com Ollama e retorna resposta para o agente. |
 | `retrieval-service` | 8766 | A validar via gateway | Health, indexacao e busca precisam ser retestados pelo API Gateway. |
 | `tool-registry` | 8082 -> 8400 | A validar via gateway | Listagem e execucao de ferramenta precisam ser retestadas pelo API Gateway. |
-| `service-memory` | 8000 | A validar | Rotas existem, mas ainda falta validar persistencia real com o agente. |
+| `service-memory` | 8000 | Validado | Persiste historico por `sessionId` e integra com o `agent-service`. |
 | RabbitMQ | 5672 / 15672 | Validado | O agente publica em `agent.telemetry` e consome com `@RabbitListener`. |
 | Prometheus | 9090 | Implementado | Coleta `/actuator/prometheus` dos servicos Spring. |
 | Grafana | 3000 | Implementado | Provisionado com datasource Prometheus. |
 | Qdrant | 6333 / 6334 | Usado pelo RAG | Banco vetorial do `retrieval-service`. |
-| Ollama | 11434 | Usado pelo LLM/RAG | Modelos `qwen2.5:3b` e `nomic-embed-text`. |
-| PostgreSQL | 5432 | A validar com memoria | Banco do `service-memory`. |
-| Redis | 6379 | A validar com memoria | Cache do `service-memory`. |
+| Ollama | 11434 | Usado pelo LLM/RAG | Modelos `qwen2.5:0.5b`, `qwen2.5:3b` e `nomic-embed-text`. O chat usa `qwen2.5:0.5b` para caber melhor no ambiente local. |
+| PostgreSQL | 5432 | Validado com memoria | Banco do `service-memory`. |
+| Redis | 6379 | Validado com memoria | Cache do `service-memory`. |
 
 ---
 
@@ -137,6 +137,40 @@ curl http://localhost:8765/actuator/circuitbreakers
 curl http://localhost:8765/actuator/circuitbreakerevents
 ```
 
+### Service Memory
+
+O `service-memory` foi validado direto e via API Gateway:
+
+```bash
+curl http://localhost:8080/service-memory/health
+curl -X POST http://localhost:8080/service-memory/api/memory/session-teste \
+  -H "Content-Type: application/json" \
+  -d '{"role":"user","content":"Meu nome e Ana."}'
+curl http://localhost:8080/service-memory/api/memory/session-teste
+```
+
+Tambem foi validado de ponta a ponta pelo agente:
+
+```bash
+curl -X POST http://localhost:8080/agent-service/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"session-memory-codex","message":"Meu nome e Ana. Guarde essa informacao em memoria."}'
+```
+
+Segunda chamada com a mesma sessao:
+
+```bash
+curl -X POST http://localhost:8080/agent-service/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"session-memory-codex","message":"Qual e o meu nome?"}'
+```
+
+Resultado observado:
+
+- historico salvo com mensagens `user` e `assistant`;
+- resposta final: `Seu nome é Ana.`;
+- retorno do `GET /api/memory/{sessionId}` limpo em formato `role/content`, compativel com o DTO Java `LlmMessage`.
+
 ---
 
 ## 4. Proximas Integracoes a Validar
@@ -191,63 +225,44 @@ curl -X POST http://localhost:8080/tool-registry/tools/calculator/execute \
 
 ---
 
-## 5. Fluxos de Negocio a Validar
+## 5. Fluxos de Negocio Validados
 
 ### Fluxo RAG completo via Gateway
 
 ```bash
 curl -X POST http://localhost:8080/agent-service/api/agent/chat \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"session-rag-gateway","message":"onde fica a sede da empresa Nubo?"}'
+  -d '{"sessionId":"session-rag-final-2","message":"Use a ferramenta buscarNaBaseDeConhecimento para responder: onde fica a sede oficial da empresa Nubo?"}'
 ```
 
-Resultado esperado:
+Resultado observado:
 
 - resposta mencionando Porto Alegre;
-- `toolsUsed` contendo `buscarNaBaseDeConhecimento`, se o LLM decidir usar RAG;
-- mais de uma iteracao quando houver chamada de ferramenta.
+- `toolsUsed` contendo `buscarNaBaseDeConhecimento`;
+- `iterations: 2`.
 
 ### Fluxo de ferramenta remota via Tool Registry
 
 ```bash
 curl -X POST http://localhost:8080/agent-service/api/agent/chat \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"session-calc-gateway","message":"quanto e 98234 * 87234? Use uma ferramenta se precisar."}'
+  -d '{"sessionId":"session-calc-final","message":"Use a ferramenta calculator para calcular exatamente: 98234 * 87234. Responda apenas com o resultado."}'
 ```
 
-Resultado esperado:
+Resultado observado:
 
-- resposta com o valor correto da multiplicacao;
-- `toolsUsed` contendo `calculator`, se o LLM escolher a ferramenta remota.
+- resposta com `8.569344756E9`, equivalente a `8569344756`;
+- `toolsUsed` contendo `calculator`;
+- `iterations: 2`.
 
 ---
 
 ## 6. Pendencias Funcionais
 
-### 6.1 `service-memory`
+Nao ha pendencia funcional grande conhecida no momento. Restam principalmente tarefas finais de entrega:
 
-O que falta validar:
-
-- se o container sobe estavel;
-- se o agente consegue salvar mensagens sem erro;
-- se uma segunda chamada com a mesma `sessionId` recupera o historico;
-- se o JSON retornado pelo FastAPI e aceito pelo `LlmMessage` do Java.
-
-Comandos sugeridos:
-
-```bash
-curl http://localhost:8080/service-memory/api/memory/session-teste
-```
-
-```bash
-curl -X POST http://localhost:8080/service-memory/api/memory/session-teste \
-  -H "Content-Type: application/json" \
-  -d '{"role":"user","content":"Meu nome e Ana."}'
-```
-
-```bash
-curl http://localhost:8080/service-memory/api/memory/session-teste
-```
+- recuperacao do Circuit Breaker de `OPEN` para `HALF_OPEN` e `CLOSED`;
+- revisao do roteiro/documentacao final.
 
 ---
 
@@ -256,13 +271,10 @@ curl http://localhost:8080/service-memory/api/memory/session-teste
 1. Subir/rebuildar a stack com observabilidade.
 2. Validar Prometheus em `http://localhost:9090/targets`.
 3. Validar Grafana em `http://localhost:3000`.
-4. Validar `retrieval-service` via gateway.
-5. Validar `tool-registry` via gateway.
-6. Validar RAG completo via gateway.
-7. Validar calculadora remota via agente.
-8. Validar ou ajustar `service-memory`.
-9. Demonstrar Circuit Breaker desligando temporariamente um servico dependente e conferindo fallback/Actuator.
-10. Atualizar `COMO_EXECUTAR.md` com os comandos finais de demonstracao.
+4. Revisar os comandos finais de demonstracao.
+5. Demonstrar Circuit Breaker desligando temporariamente um servico dependente e conferindo fallback/Actuator.
+6. Atualizar `COMO_EXECUTAR.md` com os comandos finais de demonstracao.
+7. Preparar diagrama, relatorio tecnico e roteiro do video.
 
 ---
 

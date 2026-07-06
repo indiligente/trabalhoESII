@@ -43,18 +43,30 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
       POSTGRES_DB: postgres
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
       - platform_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     networks:
       - platform_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   ollama:
     image: ollama/ollama:latest
@@ -80,7 +92,7 @@ services:
     image: ollama/ollama:latest
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull", "qwen2.5:3b"]
+    entrypoint: ["ollama", "pull", "qwen2.5:0.5b"]
     networks:
       - platform_network
     depends_on:
@@ -92,13 +104,21 @@ services:
       - "8000:8000"
     command: bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://root:root@postgres:5432/postgres
       REDIS_URL: redis://redis:6379/0
     networks:
       - platform_network
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -116,7 +136,7 @@ services:
       - "8767:8767"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: qwen2.5:3b
+      LLM_MODEL: qwen2.5:0.5b
     networks:
       - platform_network
     depends_on:
@@ -172,6 +192,8 @@ services:
         condition: service_started
       retrieval-service:
         condition: service_started
+      service-memory:
+        condition: service_healthy
 
   tool-registry:
     build: ./tool-registry

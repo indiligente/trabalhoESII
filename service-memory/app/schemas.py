@@ -8,6 +8,9 @@ class MemoryBase(BaseModel):
 class MemoryCreate(MemoryBase):
     pass
 
+class MemoryMessage(MemoryBase):
+    pass
+
 class MemoryResponse(MemoryBase):
     id: int
     agent_id: str
