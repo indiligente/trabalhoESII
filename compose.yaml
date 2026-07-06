@@ -4,26 +4,24 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    #env_file:
-    # - ./rabbitmq/.env
     networks:
       - platform_network
 
   postgres:
     image: postgres:14-alpine
-    restart: always
     ports:
       - "5432:5432"
-    #env_file:
-    # - ./postgres/.env
-    networks:
-      - platform_network
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     volumes:
       - db_data:/var/lib/postgresql/data
+    networks:
+      - platform_network
 
   redis:
     image: redis:7-alpine
-    restart: always
     networks:
       - platform_network
 
@@ -33,38 +31,42 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    healthcheck:
-      test: [ "CMD-SHELL", "ollama list || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
     networks:
       - platform_network
 
-  service-memory:
-    build: ./service-memory
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-      - redis
-    #env_file:
-    # - ./service-memory/.env
-    networks:
-      - platform_network
-
+  # Apenas executa os comandos para baixar os modelos
   ollama-pull-embed:
     image: ollama/ollama:latest
     environment:
       OLLAMA_HOST: http://ollama:11434
     entrypoint: ["ollama", "pull", "nomic-embed-text"]
     networks:
-      - plataforma-network
+      - platform_network
     depends_on:
-      ollama:
-        condition: service_healthy
-    restart: "no"
+      - ollama
+
+  ollama-pull-llm:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "qwen2.5"]
+    networks:
+      - platform_network
+    depends_on:
+      - ollama
+
+  service-memory:
+    build: ./service-memory
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+    networks:
+      - platform_network
+    depends_on:
+      - postgres
+      - redis
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -74,58 +76,37 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
-      - plataforma-network
-    healthcheck:
-      # A imagem oficial do Qdrant não tem wget/curl — checamos a porta TCP via /dev/tcp do bash.
-      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/6333' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      - platform_network
 
   llm-gateway:
     build: ./llm-gateway
     ports:
       - "8767:8767"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: qwen2.5
+    networks:
+      - platform_network
     depends_on:
-      ollama:
-        condition: service_healthy
-      ollama-pull:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8767/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      - ollama
+      - ollama-pull-llm
 
   retrieval-service:
     build: ./retrieval-service
     ports:
       - "8766:8766"
     environment:
-      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://naming-server:8761/eureka
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6334"
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: nomic-embed-text
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
     networks:
-      - plataforma-network
+      - platform_network
     depends_on:
-      naming-server:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      ollama-pull-embed:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8766/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  # ── Aplicação ─────────────────────────────────────────────────────────────────
+      - qdrant
+      - ollama-pull-embed
 
   agent-service:
     build: ./agent-service
@@ -133,18 +114,19 @@ services:
       - "8765:8765"
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
-      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://naming-server:8761/eureka
+      SPRING_DATA_REDIS_HOST: redis
+      LLM_GATEWAY_URL: http://llm-gateway:8767
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+      SPRING_AI_OLLAMA_CHAT_ENABLED: "false"
+      SPRING_AI_OLLAMA_EMBEDDING_ENABLED: "false"
+      SPRING_AI_VECTORSTORE_QDRANT_ENABLED: "false"
     networks:
-      - plataforma-network
+      - platform_network
     depends_on:
-      naming-server:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      llm-gateway:
-        condition: service_healthy
-      retrieval-service:
-        condition: service_healthy
+      - rabbitmq
+      - llm-gateway
+      - retrieval-service
 
 networks:
   platform_network:

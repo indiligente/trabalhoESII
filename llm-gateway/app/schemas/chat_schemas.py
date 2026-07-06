@@ -12,7 +12,8 @@ class ToolCall(BaseModel):
 
 class LlmChatRequest(BaseModel):
     messages: List[LlmMessage]
-    availableTools: List[str] = []
+    # Atualizado para receber os schemas das ferramentas (formato JSON Schema esperado pelo LLM)
+    availableTools: Optional[List[Dict[str, Any]]] = None 
 
 class LlmChatResponse(BaseModel):
     content: Optional[str] = None

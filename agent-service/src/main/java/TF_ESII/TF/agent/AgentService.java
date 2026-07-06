@@ -96,7 +96,7 @@ public class AgentService {
             for (var toolCall : respostaLLM.toolCalls()) {
                 ferramentasUsadas.add(toolCall.name());
 
-                String resultado = executarFerramenta(toolCall.name(), toolCall.arguments());
+                String resultado = "{}";
 
                 LlmMessage observacao = new LlmMessage("tool", "id=" + toolCall.id() + " name=" + toolCall.name() + " result=" + resultado);
                 historico.add(observacao);

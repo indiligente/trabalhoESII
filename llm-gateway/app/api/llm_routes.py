@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.chat_schemas import LlmChatRequest, LlmChatResponse
+from app.schemas.chat_schemas import LlmChatRequest, LlmChatResponse, ToolCall
 from app.services.ollama import ollama_service 
 import pybreaker
 
@@ -8,11 +8,24 @@ router = APIRouter()
 @router.post("/chat", response_model=LlmChatResponse)
 async def chat(request: LlmChatRequest):
     try:
-        response = await ollama_service.chat(request.messages)
+        response = await ollama_service.chat(request.messages, tools=request.availableTools)
+
+        tool_calls = []
+        
+        if hasattr(response.message, 'tool_calls') and response.message.tool_calls:
+            tool_calls = [
+                ToolCall(
+                    id=getattr(tc, 'id', tc.function.name),
+                    name=tc.function.name, 
+                    arguments=tc.function.arguments
+                )
+                for tc in response.message.tool_calls
+            ]
 
         return LlmChatResponse(
             content=response.message.content,
-        finishReason="stop"
+            toolCalls=tool_calls,
+            finishReason="tool_calls" if tool_calls else "stop"
         )
         
     except pybreaker.CircuitBreakerError:
