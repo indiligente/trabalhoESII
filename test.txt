@@ -1,0 +1,86 @@
+=========================================================
+ ROTEIRO DE TESTES DA PLATAFORMA DE AGENTES (TRABALHO FINAL)
+=========================================================
+
+PASSO ZERO: INICIAR A INFRAESTRUTURA
+---------------------------------------------------------
+Execute este comando para garantir que o banco seja recriado, as imagens sejam buildadas e tudo suba corretamente com as novas configurações do Gateway e Eureka:
+
+    sudo docker compose down -v
+    sudo docker compose up -d --build --force-recreate
+
+
+TESTE 1: API GATEWAY E EUREKA (ROTEAMENTO DINÂMICO)
+---------------------------------------------------------
+Valida se o API Gateway (porta 8080) consegue achar os serviços no Eureka e encaminhar a requisição.
+
+Acesse o Eureka no navegador primeiro para ver se os serviços estão listados:
+    http://localhost:8761
+
+Depois rode os comandos de health via Gateway:
+    curl http://localhost:8080/AGENT-SERVICE/api/agent/health
+    curl http://localhost:8080/RETRIEVAL-SERVICE/api/retrieval/health
+    curl http://localhost:8080/TOOL-REGISTRY/tools
+    
+Se todos retornarem corretamente, a integração de descoberta de rotas está 100%.
+
+
+TESTE 2: FLUXO COMPLETO E PERSISTÊNCIA DE MEMÓRIA
+---------------------------------------------------------
+Vamos testar se o Agente consegue conversar através do Gateway e lembrar do seu nome (Memory Service + Redis + PostgreSQL).
+
+PARTE A (Ensinar algo novo):
+    curl -X POST http://localhost:8080/AGENT-SERVICE/api/agent/chat \
+         -H "Content-Type: application/json" \
+         -d '{"sessionId": "sessao-teste-memoria", "message": "Oi! Meu nome é Mestre Jedi e eu adoro programar em Java."}'
+
+PARTE B (Verificar se a memória gravou):
+    curl -X POST http://localhost:8080/AGENT-SERVICE/api/agent/chat \
+         -H "Content-Type: application/json" \
+         -d '{"sessionId": "sessao-teste-memoria", "message": "Você lembra qual é o meu nome e o que eu adoro fazer?"}'
+         
+Se ele responder corretamente "Mestre Jedi" e "Java", o banco relacional e os nós do memory-service estão perfeitos!
+
+
+TESTE 3: TOOL REGISTRY E RAG (Raciocínio)
+---------------------------------------------------------
+Vamos ver se ele ainda consegue puxar as ferramentas.
+
+Calculadora remota:
+    curl -X POST http://localhost:8080/AGENT-SERVICE/api/agent/chat \
+         -H "Content-Type: application/json" \
+         -d '{"sessionId": "sessao-teste-tools", "message": "Qual é a soma de 8234 com 9384?"}'
+
+Data Atual:
+    curl -X POST http://localhost:8080/AGENT-SERVICE/api/agent/chat \
+         -H "Content-Type: application/json" \
+         -d '{"sessionId": "sessao-teste-tools", "message": "Que dia é hoje?"}'
+
+
+TESTE 4: RESILIÊNCIA E CIRCUIT BREAKER (RESILIENCE4J)
+---------------------------------------------------------
+Vamos derrubar o "cérebro" do sistema de propósito e ver se o Agente sobrevive dando uma mensagem amigável sem Crash (HTTP 500).
+
+1. Desligue o LLM Gateway:
+    sudo docker compose stop llm-gateway
+
+2. Tente fazer uma pergunta:
+    curl -X POST http://localhost:8080/AGENT-SERVICE/api/agent/chat \
+         -H "Content-Type: application/json" \
+         -d '{"sessionId": "sessao-teste-crash", "message": "Oi, pode me ajudar?"}'
+
+Se o Circuit Breaker funcionar, a requisição não ficará travada esperando timeout eterno, nem voltará "Internal Server Error". Ele deve responder imediatamente: "Desculpe, meu cérebro (LLM Gateway) está temporariamente indisponível."
+
+3. Religue o LLM para não quebrar os próximos testes:
+    sudo docker compose start llm-gateway
+
+
+TESTE 5: MENSAGERIA E OBSERVABILIDADE BÁSICA (RABBITMQ)
+---------------------------------------------------------
+Valide que o agente não apenas faz tudo isso, mas também publica de forma assíncrona (na surdina) a telemetria do que está acontecendo:
+
+1. Acesse o RabbitMQ pelo navegador:
+    http://localhost:15672 (Usuário: guest / Senha: guest)
+
+2. Vá na aba "Queues" (Filas) e clique em "agent.telemetry".
+3. Clique em "Get messages". Você deverá ver todos os logs de duração, iteração e motivos de parada (finishReason) das conversas que você acabou de ter!

@@ -59,6 +59,7 @@ services:
     build: ./service-memory
     ports:
       - "8000:8000"
+    command: bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/postgres
       REDIS_URL: redis://redis:6379/0
@@ -100,8 +101,9 @@ services:
       QDRANT_PORT: "6334"
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_MODEL: nomic-embed-text
-      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
-      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://naming-server:8761/eureka/"
     networks:
       - platform_network
     depends_on:
@@ -120,8 +122,9 @@ services:
       LLM_GATEWAY_URL: http://llm-gateway:8767
       TOOL_REGISTRY_URL: http://tool-registry:8400
       RETRIEVAL_SERVICE_URL: http://retrieval-service:8766
-      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
-      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://naming-server:8761/eureka/"
       SPRING_AI_OLLAMA_CHAT_ENABLED: "false"
       SPRING_AI_OLLAMA_EMBEDDING_ENABLED: "false"
       SPRING_AI_VECTORSTORE_QDRANT_ENABLED: "false"
@@ -137,10 +140,29 @@ services:
     ports:
       - "8082:8400"
     environment:
-      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
-      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "true"
+      EUREKA_CLIENT_FETCH_REGISTRY: "true"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://naming-server:8761/eureka/"
     networks:
       - platform_network
+
+  naming-server:
+    build: ./naming-server
+    ports:
+      - "8761:8761"
+    networks:
+      - platform_network
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://naming-server:8761/eureka/
+    networks:
+      - platform_network
+    depends_on:
+      - naming-server
 
 networks:
   platform_network:

@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 class MemoryBase(BaseModel):
-    agent_id: str
+    role: str
     content: str
 
 class MemoryCreate(MemoryBase):
@@ -10,6 +10,7 @@ class MemoryCreate(MemoryBase):
 
 class MemoryResponse(MemoryBase):
     id: int
+    agent_id: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

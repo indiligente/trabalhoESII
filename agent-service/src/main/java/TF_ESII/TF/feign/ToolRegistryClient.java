@@ -10,7 +10,7 @@ import java.util.List;
 import TF_ESII.TF.DTO.Tool;
 import TF_ESII.TF.DTO.ToolInvocationRequest;
 
-@FeignClient(name = "tool-registry", url = "${TOOL_REGISTRY_URL:http://tool-registry:8400}")
+@FeignClient(name = "tool-registry")
 public interface ToolRegistryClient {
     @GetMapping("/tools")
     List<Tool> listTools();

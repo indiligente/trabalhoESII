@@ -24,6 +24,7 @@ def upgrade() -> None:
     op.create_table('memories',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('agent_id', sa.String(), nullable=False),
+    sa.Column('role', sa.String(), nullable=False, server_default='user'),
     sa.Column('content', sa.Text(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.PrimaryKeyConstraint('id')

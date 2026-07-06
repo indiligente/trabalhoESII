@@ -18,18 +18,18 @@ async def get_db():
 def read_root():
     return {"message": "Memory Service is running!"}
 
-@app.post("/memories/", response_model=schemas.MemoryResponse)
-async def create_memory(memory: schemas.MemoryCreate, db: AsyncSession = Depends(get_db)):
-    new_memory = await crud.create_memory(db=db, memory=memory)
+@app.post("/api/memory/{sessionId}", response_model=schemas.MemoryResponse)
+async def create_memory(sessionId: str, memory: schemas.MemoryCreate, db: AsyncSession = Depends(get_db)):
+    new_memory = await crud.create_memory(db=db, memory=memory, agent_id=sessionId)
     
-    cache_key = f"memories:{memory.agent_id}"
+    cache_key = f"memories:{sessionId}"
     await redis_client.delete(cache_key)
     
     return new_memory
 
-@app.get("/memories/{agent_id}", response_model=List[schemas.MemoryResponse])
-async def read_memories(agent_id: str, db: AsyncSession = Depends(get_db)):
-    cache_key = f"memories:{agent_id}"
+@app.get("/api/memory/{sessionId}", response_model=List[schemas.MemoryResponse])
+async def read_memories(sessionId: str, db: AsyncSession = Depends(get_db)):
+    cache_key = f"memories:{sessionId}"
     
     # 1. Tenta buscar no Redis primeiro
     cached_memories = await redis_client.get(cache_key)
@@ -39,7 +39,7 @@ async def read_memories(agent_id: str, db: AsyncSession = Depends(get_db)):
         
     print("Buscando do Banco de Dados (PostgreSQL)!")
     # 2. Se não tem no cache, busca no PostgreSQL
-    memories = await crud.get_memories_by_agent(db=db, agent_id=agent_id)
+    memories = await crud.get_memories_by_agent(db=db, agent_id=sessionId)
     
     # 3. Transforma o resultado em um formato que o Redis aceita (JSON) e salva por 1 hora (3600 segundos)
     if memories:

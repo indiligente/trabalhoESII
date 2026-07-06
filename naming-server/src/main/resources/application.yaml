@@ -1,29 +1,6 @@
 server:
   port: 8761
 
-spring:
-<<<<<<< HEAD
-  application:
-    name: naming-server
-
-=======
- application:
- name: naming-server
- cloud:
- gateway.server.webflux:
- discovery:
- locator:
- enabled: true
- lower-case-service-id: true
-management:
- endpoint:
- health:
- show-details: always
- endpoints:
- web:
- exposure:
- include:
->>>>>>> main
 eureka:
   instance:
     hostname: localhost

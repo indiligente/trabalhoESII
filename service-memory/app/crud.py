@@ -2,9 +2,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from . import models, schemas
 
-async def create_memory(db: AsyncSession, memory: schemas.MemoryCreate):
+async def create_memory(db: AsyncSession, memory: schemas.MemoryCreate, agent_id: str):
     db_memory = models.Memory(
-        agent_id=memory.agent_id,
+        agent_id=agent_id,
+        role=memory.role,
         content=memory.content
     )
     

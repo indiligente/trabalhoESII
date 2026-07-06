@@ -7,8 +7,9 @@ class Memory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     agent_id = Column(String, index=True, nullable=False)
+    role = Column(String, nullable=False, default="user")
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
-        return f"<Memory(id={self.id}, agent_id='{self.agent_id}')>"
+        return f"<Memory(id={self.id}, agent_id='{self.agent_id}', role='{self.role}')>"

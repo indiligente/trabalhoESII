@@ -18,6 +18,7 @@ import TF_ESII.TF.feign.MemoryServiceClient;
 import TF_ESII.TF.feign.ToolRegistryClient;
 import TF_ESII.TF.DTO.Tool;
 import TF_ESII.TF.DTO.ToolInvocationRequest;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 @Service
 public class AgentService {
@@ -52,6 +53,7 @@ public class AgentService {
         this.toolRegistryClient = toolRegistryClient;
     }
 
+    @CircuitBreaker(name = "llmGateway", fallbackMethod = "fallbackProcessar")
     public AgentResponse processar(AgentRequest request) {
         // Monta histórico: system prompt + histórico persistido no memory-service
         List<LlmMessage> historico = new ArrayList<>();
@@ -128,6 +130,15 @@ public class AgentService {
             "Não foi possível completar a tarefa no número máximo de iterações. Tente reformular sua pergunta.",
             ferramentasUsadas,
             iteracao
+        );
+    }
+
+    public AgentResponse fallbackProcessar(AgentRequest request, Throwable t) {
+        return new AgentResponse(
+            request.sessionId(),
+            "Desculpe, meu cérebro (LLM Gateway) está temporariamente indisponível. Tente novamente mais tarde.",
+            new ArrayList<>(),
+            0
         );
     }
 

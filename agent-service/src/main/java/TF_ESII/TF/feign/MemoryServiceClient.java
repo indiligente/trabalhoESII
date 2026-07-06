@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import TF_ESII.TF.DTO.llm.LlmMessage;
 
-@FeignClient(name = "memory-service")
+@FeignClient(name = "memory-service", url = "${MEMORY_SERVICE_URL:http://service-memory:8000}")
 public interface MemoryServiceClient {
 
     @GetMapping("/api/memory/{sessionId}")
