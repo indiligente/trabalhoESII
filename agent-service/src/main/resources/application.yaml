@@ -27,7 +27,32 @@ feign:
         connectTimeout: 5000
         readTimeout: 60000
 
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 20s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      llmGateway:
+        baseConfig: default
+      memoryService:
+        baseConfig: default
+      toolRegistry:
+        baseConfig: default
+      retrievalService:
+        baseConfig: default
+
 management:
+  health:
+    circuitbreakers:
+      enabled: true
   prometheus:
     metrics:
       export:

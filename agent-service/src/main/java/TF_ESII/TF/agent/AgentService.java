@@ -13,12 +13,8 @@ import TF_ESII.TF.DTO.AgentResponse;
 import TF_ESII.TF.DTO.llm.LlmChatRequest;
 import TF_ESII.TF.DTO.llm.LlmChatResponse;
 import TF_ESII.TF.DTO.llm.LlmMessage;
-import TF_ESII.TF.feign.LlmGatewayClient;
-import TF_ESII.TF.feign.MemoryServiceClient;
-import TF_ESII.TF.feign.ToolRegistryClient;
 import TF_ESII.TF.DTO.Tool;
 import TF_ESII.TF.DTO.ToolInvocationRequest;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 @Service
 public class AgentService {
@@ -39,32 +35,23 @@ public class AgentService {
             Não invente informações. Se não souber, diga claramente.
             """;
 
-    private final LlmGatewayClient llmGatewayClient;
-    private final MemoryServiceClient memoryServiceClient;
     private final AgentTools agentTools;
     private final RabbitTemplate rabbitTemplate;
-    private final ToolRegistryClient toolRegistryClient;
+    private final AgentExternalServices externalServices;
 
-    public AgentService(LlmGatewayClient llmGatewayClient, MemoryServiceClient memoryServiceClient, AgentTools agentTools, RabbitTemplate rabbitTemplate, ToolRegistryClient toolRegistryClient) {
-        this.llmGatewayClient = llmGatewayClient;
-        this.memoryServiceClient = memoryServiceClient;
+    public AgentService(AgentTools agentTools, RabbitTemplate rabbitTemplate, AgentExternalServices externalServices) {
         this.agentTools = agentTools;
         this.rabbitTemplate = rabbitTemplate;
-        this.toolRegistryClient = toolRegistryClient;
+        this.externalServices = externalServices;
     }
 
-    @CircuitBreaker(name = "llmGateway", fallbackMethod = "fallbackProcessar")
     public AgentResponse processar(AgentRequest request) {
         // Monta histórico: system prompt + histórico persistido no memory-service
         List<LlmMessage> historico = new ArrayList<>();
         historico.add(new LlmMessage("system", PROMPT_SISTEMA));
 
-        try {
-            List<LlmMessage> historicoSalvo = memoryServiceClient.loadHistory(request.sessionId());
-            if (historicoSalvo != null) historico.addAll(historicoSalvo);
-        } catch (Exception e) {
-            // memory-service indisponível — continua com histórico local vazio
-        }
+        List<LlmMessage> historicoSalvo = externalServices.loadHistory(request.sessionId());
+        if (historicoSalvo != null) historico.addAll(historicoSalvo);
 
         LlmMessage mensagemUsuario = new LlmMessage("user", request.message());
         historico.add(mensagemUsuario);
@@ -73,14 +60,14 @@ public class AgentService {
         List<String> ferramentasUsadas = new ArrayList<>();
         int iteracao = 0;
         
-        List<Tool> ferramentasDisponiveis = toolRegistryClient.listTools();
+        List<Tool> ferramentasDisponiveis = externalServices.listTools();
         List<Map<String, Object>> toolsForLlm = formatToolsForLlm(ferramentasDisponiveis);
         
         while (iteracao < MAX_ITERACOES) {
             iteracao++;
             long inicio = Instant.now().toEpochMilli();
 
-            LlmChatResponse respostaLLM = llmGatewayClient.chat(
+            LlmChatResponse respostaLLM = externalServices.chat(
                 new LlmChatRequest(historico, toolsForLlm)
             );
 
@@ -116,7 +103,7 @@ public class AgentService {
                     resultado = agentTools.obterDataHoraAtual();
                 } else {
                     ToolInvocationRequest requestPayload = new ToolInvocationRequest((Map<String, Object>) toolCall.arguments());
-                    resultado = toolRegistryClient.executeTool(toolCall.name(), requestPayload);
+                    resultado = externalServices.executeTool(toolCall.name(), requestPayload);
                 }
 
                 LlmMessage observacao = new LlmMessage("tool", "id=" + toolCall.id() + " name=" + toolCall.name() + " result=" + resultado);
@@ -133,15 +120,6 @@ public class AgentService {
         );
     }
 
-    public AgentResponse fallbackProcessar(AgentRequest request, Throwable t) {
-        return new AgentResponse(
-            request.sessionId(),
-            "Desculpe, meu cérebro (LLM Gateway) está temporariamente indisponível. Tente novamente mais tarde.",
-            new ArrayList<>(),
-            0
-        );
-    }
-
     private String executarFerramenta(String nome, String argumentosJson) {
         return switch (nome) {
             case "buscarNaBaseDeConhecimento" -> {
@@ -154,11 +132,7 @@ public class AgentService {
     }
 
     private void salvarMensagem(String sessionId, LlmMessage mensagem) {
-        try {
-            memoryServiceClient.saveMessage(sessionId, mensagem);
-        } catch (Exception e) {
-            // memory-service indisponível — sem persistência neste turno
-        }
+        externalServices.saveMessage(sessionId, mensagem);
     }
 
     // Publica métricas de cada chamada LLM na fila RabbitMQ de forma assíncrona

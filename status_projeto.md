@@ -1,7 +1,7 @@
 # Status Completo do Projeto - trabalhoESII
 
-> **Data:** 06/07/2026 - 20:25  
-> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway, RabbitMQ e observabilidade com Prometheus/Grafana ja foram implementados.
+> **Data:** 06/07/2026 - 20:40  
+> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway, RabbitMQ, Circuit Breaker e observabilidade com Prometheus/Grafana ja foram implementados.
 
 ---
 
@@ -14,7 +14,7 @@ O projeto deve entregar uma plataforma de microsservicos distribuida para agente
 | Arquitetura de microsservicos | OK |
 | Comunicacao sincrona REST/Feign | OK |
 | Comunicacao assincrona RabbitMQ | OK |
-| Resiliencia / Circuit Breaker | Parcial |
+| Resiliencia / Circuit Breaker | OK |
 | Service Discovery com Eureka | OK |
 | API Gateway | OK |
 | Observabilidade | OK |
@@ -28,7 +28,7 @@ O projeto deve entregar uma plataforma de microsservicos distribuida para agente
 |:---|:---:|:---:|:---|
 | `api-gateway` | 8080 | Validado | Roteia `/agent-service/**`, `/retrieval-service/**`, `/tool-registry/**`, `/llm-gateway/**` e `/service-memory/**`. |
 | `naming-server` / Eureka | 8761 | Validado | Registra os servicos Spring principais. |
-| `agent-service` | 8765 | Validado | Responde via gateway, chama LLM e publica telemetria. |
+| `agent-service` | 8765 | Validado | Responde via gateway, chama LLM, publica telemetria e protege chamadas externas com Circuit Breaker. |
 | `llm-gateway` | 8767 | Validado | Integra com Ollama e retorna resposta para o agente. |
 | `retrieval-service` | 8766 | A validar via gateway | Health, indexacao e busca precisam ser retestados pelo API Gateway. |
 | `tool-registry` | 8082 -> 8400 | A validar via gateway | Listagem e execucao de ferramenta precisam ser retestadas pelo API Gateway. |
@@ -116,6 +116,25 @@ Grafana:
 http://localhost:3000
 usuario: admin
 senha: admin
+```
+
+### Circuit Breaker
+
+O `agent-service` possui circuit breakers com Resilience4j para:
+
+- `llmGateway`
+- `memoryService`
+- `toolRegistry`
+- `retrievalService`
+
+Os fallbacks mantem o agente respondendo de forma degradada quando algum servico externo fica indisponivel.
+
+Comandos de verificacao:
+
+```bash
+curl http://localhost:8765/actuator/health
+curl http://localhost:8765/actuator/circuitbreakers
+curl http://localhost:8765/actuator/circuitbreakerevents
 ```
 
 ---
@@ -242,7 +261,8 @@ curl http://localhost:8080/service-memory/api/memory/session-teste
 6. Validar RAG completo via gateway.
 7. Validar calculadora remota via agente.
 8. Validar ou ajustar `service-memory`.
-9. Atualizar `COMO_EXECUTAR.md` com os comandos finais de demonstracao.
+9. Demonstrar Circuit Breaker desligando temporariamente um servico dependente e conferindo fallback/Actuator.
+10. Atualizar `COMO_EXECUTAR.md` com os comandos finais de demonstracao.
 
 ---
 
