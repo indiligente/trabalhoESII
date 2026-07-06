@@ -6,19 +6,47 @@ spring:
     name: api-gateway
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      # Podemos definir rotas explícitas aqui, mas o locator=true já cria as rotas automaticamente
-      # baseadas no ID do serviço registrado no Eureka, ex: /AGENT-SERVICE/** -> agent-service
+      server:
+        webmvc:
+          routes:
+            - id: agent-service
+              uri: lb://AGENT-SERVICE
+              predicates:
+                - Path=/agent-service/**
+              filters:
+                - StripPrefix=1
+            - id: retrieval-service
+              uri: lb://RETRIEVAL-SERVICE
+              predicates:
+                - Path=/retrieval-service/**
+              filters:
+                - StripPrefix=1
+            - id: tool-registry
+              uri: lb://TOOL-REGISTRY
+              predicates:
+                - Path=/tool-registry/**
+              filters:
+                - StripPrefix=1
+            - id: llm-gateway
+              uri: ${LLM_GATEWAY_URL:http://localhost:8767}
+              predicates:
+                - Path=/llm-gateway/**
+              filters:
+                - StripPrefix=1
+            - id: service-memory
+              uri: ${MEMORY_SERVICE_URL:http://localhost:8000}
+              predicates:
+                - Path=/service-memory/**
+              filters:
+                - StripPrefix=1
 
 eureka:
   client:
-    serviceUrl:
+    service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
+    registry-fetch-interval-seconds: 5
   instance:
     prefer-ip-address: true
 

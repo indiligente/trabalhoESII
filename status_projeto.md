@@ -1,239 +1,279 @@
-# 📊 Status Completo do Projeto — trabalhoESII
+# Status Completo do Projeto - trabalhoESII
 
-> **Data:** 06/07/2026 — 16:10  
-> **Situação geral:** Núcleo agêntico funcionando. Pendências de infraestrutura para entrega final.
-
----
-
-## 1. Visão Geral — O Que O Projeto Pede (PDF)
-
-O trabalho exige uma **plataforma de microsserviços distribuídos** para agentes de IA autônomos, com:
-
-| Requisito (PDF) | Descrição |
-|:---|:---|
-| **(a)** Arquitetura de microsserviços | Múltiplos serviços independentes, cada um com responsabilidade clara |
-| **(b)** Comunicação Síncrona (REST/Feign) | Comunicação HTTP entre os serviços usando OpenFeign |
-| **(c)** Comunicação Assíncrona (RabbitMQ) | Pelo menos um fluxo usando fila de mensagens |
-| **(d)** Resiliência (Circuit Breaker) | Padrão Circuit Breaker para lidar com falhas em serviços dependentes |
-| **(e)** Service Discovery (Eureka) | Naming Server para descoberta automática de serviços |
-| **(f)** API Gateway | Ponto de entrada único para todas as requisições externas |
-| **(g)** Observabilidade | Telemetria, logs ou métricas para monitoramento |
-| **(h)** Docker Compose | Toda a plataforma orquestrada via containers |
+> **Data:** 06/07/2026 - 19:55  
+> **Situacao geral:** infraestrutura principal integrada. Eureka, API Gateway e fluxo inicial do agente via gateway ja foram validados.
 
 ---
 
-## 2. Estado Atual de Cada Microsserviço
+## 1. Objetivo do Trabalho
 
-### ✅ Funcionando Corretamente
+O projeto deve entregar uma plataforma de microsservicos distribuida para agentes de IA autonomos, cobrindo:
 
-| Serviço | Porta | Status | Validação |
+| Requisito | Situacao atual |
+|:---|:---:|
+| Arquitetura de microsservicos | ✅ |
+| Comunicacao sincrona REST/Feign | ✅ |
+| Comunicacao assincrona RabbitMQ | ✅ Implementada |
+| Resiliencia / Circuit Breaker | ⚠️ Parcial |
+| Service Discovery com Eureka | ✅ |
+| API Gateway | ✅ |
+| Observabilidade | ⚠️ Parcial |
+| Docker Compose | ✅ |
+
+---
+
+## 2. Estado Atual dos Servicos
+
+| Servico | Porta externa | Status | Observacao |
 |:---|:---:|:---:|:---|
-| **agent-service** (Spring Boot) | 8765 | ✅ Running | Ciclo ReAct completo. Chama ferramentas locais e remotas. |
-| **llm-gateway** (FastAPI + Ollama) | 8767 | ✅ Running | Passa ferramentas ao LLM, retorna `tool_calls` nativos. Circuit Breaker com `pybreaker`. |
-| **retrieval-service** (Spring Boot + Qdrant) | 8766 | ✅ Running | Indexação e busca vetorial funcionais. RAG validado end-to-end. |
-| **tool-registry** (Spring Boot + H2) | 8400 (ext: 8082) | ✅ Running | Expõe ferramentas `calculator`, `echo`, `database-query`, `datetime`. |
-| **Ollama** | 11434 | ✅ Running | Modelo `qwen2.5:3b` (chat) + `nomic-embed-text` (embeddings). |
-| **Qdrant** | 6333/6334 | ✅ Running | Banco vetorial para RAG. |
-| **RabbitMQ** | 5672/15672 | ✅ Running | Fila `agent.telemetry` recebe métricas do agent-service. |
-| **PostgreSQL** | 5432 | ✅ Running | Banco relacional para o memory-service. |
-| **Redis** | 6379 | ✅ Running | Cache para o memory-service. |
+| `api-gateway` | 8080 | ✅ Validado | Roteia `/agent-service/**`, `/retrieval-service/**`, `/tool-registry/**`, `/llm-gateway/**` e `/service-memory/**`. |
+| `naming-server` / Eureka | 8761 | ✅ Validado | `API-GATEWAY`, `AGENT-SERVICE`, `RETRIEVAL-SERVICE` e `TOOL-REGISTRY` aparecem como `UP`. |
+| `agent-service` | 8765 | ✅ Validado | Responde via gateway e executa chamada real ao LLM. |
+| `llm-gateway` | 8767 | ✅ Validado | Integra com Ollama e retorna resposta para o agente. |
+| `retrieval-service` | 8766 | ⏳ A validar via gateway | Health, indexacao e busca precisam ser retestados passando pelo API Gateway. |
+| `tool-registry` | 8082 -> 8400 | ⏳ A validar via gateway | Listagem e execucao de ferramenta precisam ser retestadas passando pelo API Gateway. |
+| `service-memory` | 8000 | ⏳ A validar | Ja possui rotas `/api/memory/{sessionId}`, mas falta validar persistencia real com o agente. |
+| RabbitMQ | 5672 / 15672 | ✅ Implementado | O agente publica telemetria em `agent.telemetry` e possui consumidor com `@RabbitListener`. |
+| Qdrant | 6333 / 6334 | ✅ Usado pelo RAG | Banco vetorial do `retrieval-service`. |
+| Ollama | 11434 | ✅ Usado pelo LLM/RAG | Modelos `qwen2.5:3b` e `nomic-embed-text`. |
+| PostgreSQL | 5432 | ⏳ A validar com memoria | Banco do `service-memory`. |
+| Redis | 6379 | ⏳ A validar com memoria | Cache do `service-memory`. |
 
 ---
 
-### ❌ Com Problemas / Não Funcionando
+## 3. Validacoes Ja Feitas
 
-#### 🔴 `service-memory` (FastAPI + PostgreSQL + Redis) — Porta 8000
-**Status:** `Exited (1)` — Não sobe.
+### Eureka
 
-**Problema 1 — Contrato de API incompatível:**
-O [MemoryServiceClient.java](file:///home/indiligente/Desktop/projects/trabalhoESII/agent-service/src/main/java/TF_ESII/TF/feign/MemoryServiceClient.java) do agent-service espera:
-- `GET /api/memory/{sessionId}` → retorna `List<LlmMessage>` (role + content)
-- `POST /api/memory/{sessionId}` → recebe `LlmMessage`
-
-Mas o [main.py](file:///home/indiligente/Desktop/projects/trabalhoESII/service-memory/app/main.py) do service-memory expõe:
-- `POST /memories/` → recebe `{agent_id, content}` (schema `MemoryCreate`)
-- `GET /memories/{agent_id}` → retorna `List<MemoryResponse>` (id, agent_id, content, created_at)
-
-> [!CAUTION]
-> **As rotas, formatos de dados e nomes de campo são completamente diferentes.** O agent-service não consegue se comunicar com o memory-service. É preciso criar rotas compatíveis no memory-service OU adaptar o Feign client.
-
-**Problema 2 — Feign Client sem URL direta:**
-O `MemoryServiceClient` usa `@FeignClient(name = "memory-service")` sem `url`, igual ao bug que corrigimos no `RetrievalServiceClient`. Sem o Eureka rodando, essa chamada falha silenciosamente (o catch no `AgentService` ignora o erro).
-
-**Problema 3 — Driver de banco corrigido mas tabela não existe:**
-Corrigimos o driver para `postgresql+asyncpg://`, mas o Alembic não é executado automaticamente ao iniciar o container. As tabelas do PostgreSQL nunca são criadas.
-
----
-
-#### 🟡 `naming-server` (Spring Boot + Eureka) — Porta 8761
-**Status:** Código existe na pasta `/naming-server`, mas **NÃO está no `compose.yaml`**.
-
-**Problema adicional:** O [application.yaml](file:///home/indiligente/Desktop/projects/trabalhoESII/naming-server/src/main/resources/application.yaml) contém **conflitos de merge do Git** (linhas `<<<<<<< HEAD`, `=======`, `>>>>>>> main`), o que impede a compilação.
-
----
-
-#### 🔴 `api-gateway` — **NÃO EXISTE**
-Não há pasta nem código para o API Gateway no repositório. É um requisito obrigatório do PDF.
-
----
-
-## 3. Requisitos do PDF — Checklist Detalhado
-
-### (a) Arquitetura de Microsserviços ✅
-Todos os 6 microsserviços de aplicação existem como projetos independentes com Dockerfiles próprios.
-
-### (b) Comunicação Síncrona (REST/Feign) ✅
-| Chamada | Via | Status |
-|:---|:---|:---:|
-| agent-service → llm-gateway | Feign + URL direta | ✅ |
-| agent-service → tool-registry | Feign + URL direta | ✅ |
-| agent-service → retrieval-service | Feign + URL direta | ✅ |
-| agent-service → memory-service | Feign (sem URL!) | ❌ Contrato incompatível + sem URL |
-
-### (c) Comunicação Assíncrona (RabbitMQ) ⚠️ Parcial
-| Produtor | Fila | Consumidor | Status |
-|:---|:---|:---|:---:|
-| agent-service | `agent.telemetry` | **Nenhum** | ⚠️ |
-
-> [!WARNING]
-> O agent-service **publica** métricas de telemetria na fila `agent.telemetry` do RabbitMQ a cada chamada LLM (sessionId, iteração, duração, finishReason). Porém, **não existe nenhum consumidor** que leia essas mensagens. Para o requisito estar completo, é necessário pelo menos um consumer que processe/exiba os dados.
-
-### (d) Resiliência (Circuit Breaker) ⚠️ Parcial
-| Local | Implementação | Status |
-|:---|:---|:---:|
-| llm-gateway → Ollama | `pybreaker` (Python) — abre após 3 falhas, reseta em 30s | ✅ |
-| agent-service → llm-gateway | Sem Circuit Breaker — erro 500 cru se o gateway cair | ❌ |
-| api-gateway → serviços | API Gateway não existe | ❌ |
-
-> [!IMPORTANT]
-> O agent-service precisa de um **fallback** quando o llm-gateway retorna erro. Atualmente, uma falha no LLM propaga um HTTP 500 diretamente ao cliente.
-
-### (e) Service Discovery (Eureka) ❌
-O naming-server existe mas:
-1. Não está no `compose.yaml`
-2. O `application.yaml` tem conflitos de merge do Git
-3. Todos os microsserviços estão com `EUREKA_CLIENT_REGISTER_WITH_EUREKA: false`
-
-### (f) API Gateway ❌
-Não existe no repositório. Precisa ser criado do zero.
-
-### (g) Observabilidade ⚠️ Parcial
-- ✅ Métricas publicadas no RabbitMQ (telemetria de cada chamada LLM)
-- ✅ Endpoints `/health` nos serviços Java
-- ✅ Spring Boot Actuator habilitado (`management.endpoints.web.exposure.include: "*"`)
-- ❌ Não há consumidor das métricas nem dashboard
-
-### (h) Docker Compose ✅
-Toda a plataforma está orquestrada via `compose.yaml` com rede bridge compartilhada.
-
----
-
-## 4. Fluxos Validados com Sucesso
-
-### Fluxo RAG Completo ✅
-```
-Usuário → agent-service → llm-gateway (Ollama qwen2.5:3b)
-                               ↓ tool_calls: buscarNaBaseDeConhecimento
-                         agent-service → retrieval-service → Qdrant
-                               ↓ resultado da busca vetorial
-                         agent-service → llm-gateway (resposta final)
-                               ↓
-                         Resposta ao Usuário (com dados do RAG)
-```
-**Teste validado:** *"onde fica a sede da empresa Nubo?"* → respondeu corretamente *"Porto Alegre, fundada em 2015"*.
-
-### Fluxo de Ferramentas Remotas (Tool Registry) ⏳ Pendente validação
-```
-Usuário → agent-service → llm-gateway (Ollama)
-                               ↓ tool_calls: calculator
-                         agent-service → tool-registry → executa cálculo
-                               ↓ resultado
-                         Resposta ao Usuário
-```
-**Teste:** Aguardando validação com `98234 * 87234`.
-
-### Telemetria Assíncrona (RabbitMQ) ✅ Publicação
-A cada chamada LLM, o agent-service publica na fila `agent.telemetry`:
-```json
-{
-  "sessionId": "session-rag4",
-  "iteracao": 1,
-  "duracaoMs": 12345,
-  "finishReason": "tool_calls",
-  "timestamp": "2026-07-06T19:05:00Z"
-}
-```
-Pode ser verificado no painel do RabbitMQ: http://localhost:15672 (user: `guest`, pass: `guest`).
-
----
-
-## 5. Roteiro de Finalização (Priorizado)
-
-Dado o tempo limitado, aqui está a ordem recomendada:
-
-### 🔴 Prioridade ALTA (Obrigatório para entrega)
-
-#### Tarefa 1: Corrigir o `naming-server` e adicionar ao compose (~15min)
-1. Limpar os conflitos de merge do Git no `application.yaml`
-2. Adicionar o serviço `naming-server` ao `compose.yaml`
-3. Alterar os microsserviços Java para `EUREKA_CLIENT_REGISTER_WITH_EUREKA: true`
-
-#### Tarefa 2: Criar o `api-gateway` (~30min)
-1. Criar projeto Spring Boot com `Spring Cloud Gateway` + `Eureka Client`
-2. Configurar rotas para os serviços internos
-3. Adicionar ao `compose.yaml`
-
-#### Tarefa 3: Corrigir o `service-memory` (~20min)
-1. Adicionar rotas `/api/memory/{sessionId}` compatíveis com o Feign client do agent-service
-2. Adicionar URL direta ao `MemoryServiceClient` do Feign
-3. Executar Alembic para criar as tabelas
-4. Adicionar variável `MEMORY_SERVICE_URL` no compose
-
-#### Tarefa 4: Adicionar fallback/Circuit Breaker no agent-service (~10min)
-1. Envolver a chamada `llmGatewayClient.chat()` em try-catch
-2. Retornar mensagem amigável de fallback ao usuário
-
-### 🟡 Prioridade MÉDIA (Desejável)
-
-#### Tarefa 5: Criar consumidor de telemetria RabbitMQ (~15min)
-Criar um `@RabbitListener` no agent-service (ou novo serviço) que consuma da fila `agent.telemetry` e logue as métricas, completando o fluxo assíncrono.
-
-#### Tarefa 6: Testes da calculadora e data/hora (~5min)
-Validar as ferramentas remotas do tool-registry via agente.
-
-### 🟢 Prioridade BAIXA (Bônus)
-
-#### Tarefa 7: Dashboard de observabilidade
-Configurar Prometheus/Grafana ou simplesmente um endpoint que exponha as métricas consumidas do RabbitMQ.
-
----
-
-## 6. Comandos de Teste Rápido
+Comando:
 
 ```bash
-# Verificar quais containers estão rodando
-sudo docker compose ps -a
+curl http://localhost:8761/eureka/apps
+```
 
-# Testar health de cada serviço
-curl http://localhost:8765/api/agent/health     # agent-service
-curl http://localhost:8766/api/retrieval/health  # retrieval-service
-curl http://localhost:8767/health                # llm-gateway
+Resultado observado:
 
-# Indexar documento no RAG
-curl -X POST http://localhost:8766/api/retrieval/documents \
-     -H "Content-Type: application/json" \
-     -d '{"content": "A sede oficial da empresa Nubo é em Porto Alegre, fundada em 2015."}'
+- `API-GATEWAY` registrado e `UP`
+- `AGENT-SERVICE` registrado e `UP`
+- `RETRIEVAL-SERVICE` registrado e `UP`
+- `TOOL-REGISTRY` registrado e `UP`
 
-# Testar RAG via Agente
-curl -X POST http://localhost:8765/api/agent/chat \
-     -H "Content-Type: application/json" \
-     -d '{"sessionId": "session-rag", "message": "onde fica a sede da empresa Nubo?"}'
+### API Gateway -> Agent Service -> LLM
 
-# Testar calculadora via Agente
-curl -X POST http://localhost:8765/api/agent/chat \
-     -H "Content-Type: application/json" \
-     -d '{"sessionId": "session-calc", "message": "quanto é 98234 * 87234?"}'
+Comando validado:
 
-# Verificar mensagens no RabbitMQ (painel web)
-# http://localhost:15672 → Queues → agent.telemetry → Get Messages
+```bash
+curl -i -X POST http://localhost:8080/agent-service/api/agent/nova-sessao \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Ola, crie uma nova sessao e me responda oi"}'
+```
+
+Resultado observado:
+
+- HTTP `200`
+- retorno com `sessionId`
+- resposta gerada pelo LLM
+- `toolsUsed: []`
+- `iterations: 1`
+
+Conclusao: o gateway removeu corretamente o prefixo `/agent-service`, encaminhou para `/api/agent/nova-sessao`, o agente chamou o LLM e retornou resposta ao cliente.
+
+---
+
+## 4. Proximas Integracoes a Validar
+
+### 4.1 API Gateway -> Retrieval Service
+
+Por que e necessario:
+
+- comprova que o gateway nao funciona apenas para o `agent-service`;
+- valida o requisito de ponto unico de entrada para o RAG;
+- confirma que endpoints de indexacao e busca vetorial continuam acessiveis depois da introducao do gateway;
+- prepara o teste do fluxo completo `usuario -> gateway -> agent-service -> retrieval-service -> Qdrant`.
+
+Comandos:
+
+```bash
+curl http://localhost:8080/retrieval-service/api/retrieval/health
+```
+
+```bash
+curl -X POST http://localhost:8080/retrieval-service/api/retrieval/documents \
+  -H "Content-Type: application/json" \
+  -d '{"content":"A sede oficial da empresa Nubo e em Porto Alegre, fundada em 2015."}'
+```
+
+```bash
+curl -X POST http://localhost:8080/retrieval-service/api/retrieval/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"onde fica a sede da empresa Nubo?","topK":3}'
+```
+
+### 4.2 API Gateway -> Tool Registry
+
+Por que e necessario:
+
+- comprova que o catalogo de ferramentas esta exposto pelo ponto unico de entrada;
+- valida que ferramentas remotas podem ser listadas e executadas sem acessar a porta interna do servico diretamente;
+- prepara o fluxo agêntico em que o LLM escolhe uma ferramenta e o `agent-service` executa no `tool-registry`;
+- ajuda a demonstrar comunicacao sincrona entre microsservicos.
+
+Comandos:
+
+```bash
+curl http://localhost:8080/tool-registry/tools
+```
+
+```bash
+curl -X POST http://localhost:8080/tool-registry/tools/calculator/execute \
+  -H "Content-Type: application/json" \
+  -d '{"params":{"expression":"98234 * 87234"}}'
+```
+
+---
+
+## 5. Fluxos de Negocio a Validar
+
+### Fluxo RAG completo via Gateway
+
+Objetivo: provar o caminho completo:
+
+```text
+Cliente -> API Gateway -> Agent Service -> LLM Gateway -> Tool call local
+        -> Retrieval Service -> Qdrant -> Agent Service -> LLM Gateway -> resposta
+```
+
+Comando:
+
+```bash
+curl -X POST http://localhost:8080/agent-service/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"session-rag-gateway","message":"onde fica a sede da empresa Nubo?"}'
+```
+
+Resultado esperado:
+
+- resposta mencionando Porto Alegre;
+- `toolsUsed` contendo `buscarNaBaseDeConhecimento`, se o LLM decidir usar RAG;
+- mais de uma iteracao quando houver chamada de ferramenta.
+
+### Fluxo de ferramenta remota via Tool Registry
+
+Objetivo: provar o caminho:
+
+```text
+Cliente -> API Gateway -> Agent Service -> LLM Gateway
+        -> Tool Registry -> ferramenta calculator -> Agent Service -> resposta
+```
+
+Comando:
+
+```bash
+curl -X POST http://localhost:8080/agent-service/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"session-calc-gateway","message":"quanto e 98234 * 87234? Use uma ferramenta se precisar."}'
+```
+
+Resultado esperado:
+
+- resposta com o valor correto da multiplicacao;
+- `toolsUsed` contendo `calculator`, se o LLM escolher a ferramenta remota.
+
+---
+
+## 6. Pendencias Funcionais
+
+### 6.1 `service-memory`
+
+Estado atual:
+
+- o `agent-service` chama `GET /api/memory/{sessionId}` e `POST /api/memory/{sessionId}`;
+- o `service-memory` ja expoe essas rotas;
+- o compose executa `alembic upgrade head` antes de subir o FastAPI;
+- o `MemoryServiceClient` ja usa `MEMORY_SERVICE_URL`.
+
+O que falta validar:
+
+- se o container sobe estavel;
+- se o agente consegue salvar mensagens sem erro;
+- se uma segunda chamada com a mesma `sessionId` recupera o historico;
+- se o JSON retornado pelo FastAPI e aceito pelo `LlmMessage` do Java.
+
+Comandos sugeridos:
+
+```bash
+curl http://localhost:8080/service-memory/api/memory/session-teste
+```
+
+```bash
+curl -X POST http://localhost:8080/service-memory/api/memory/session-teste \
+  -H "Content-Type: application/json" \
+  -d '{"role":"user","content":"Meu nome e Ana."}'
+```
+
+```bash
+curl http://localhost:8080/service-memory/api/memory/session-teste
+```
+
+### 6.2 Consumidor RabbitMQ
+
+Estado atual:
+
+- o `agent-service` publica metricas na fila `agent.telemetry`;
+- existe um consumidor `@RabbitListener` para `agent.telemetry`;
+- a fila e declarada como duravel pelo `agent-service`;
+- as mensagens sao serializadas como JSON e logadas no console do servico.
+
+O que falta validar:
+
+- rebuildar o `agent-service`;
+- fazer uma chamada ao agente;
+- verificar nos logs a linha `Telemetry event received`.
+
+---
+
+## 7. Roteiro Priorizado
+
+1. Validar `retrieval-service` via gateway.
+2. Validar `tool-registry` via gateway.
+3. Validar RAG completo via gateway.
+4. Validar calculadora remota via agente.
+5. Validar ou ajustar `service-memory`.
+6. Adicionar Prometheus/Grafana para observabilidade.
+7. Atualizar `COMO_EXECUTAR.md` com os comandos novos via gateway.
+
+---
+
+## 8. Comandos de Apoio
+
+Ver containers:
+
+```bash
+docker compose ps -a
+```
+
+Logs principais:
+
+```bash
+docker compose logs -f --tail=200 api-gateway naming-server agent-service retrieval-service tool-registry
+```
+
+Logs da memoria:
+
+```bash
+docker compose logs -f --tail=200 service-memory postgres redis
+```
+
+Logs de telemetria:
+
+```bash
+docker compose logs -f --tail=200 rabbitmq agent-service
+```
+
+Painel RabbitMQ:
+
+```text
+http://localhost:15672
+usuario: guest
+senha: guest
 ```

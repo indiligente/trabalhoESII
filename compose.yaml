@@ -107,6 +107,8 @@ services:
     networks:
       - platform_network
     depends_on:
+      naming-server:
+        condition: service_healthy
       qdrant:
         condition: service_started
       ollama-pull-embed:
@@ -131,9 +133,14 @@ services:
     networks:
       - platform_network
     depends_on:
-      - rabbitmq
-      - llm-gateway
-      - retrieval-service
+      naming-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      llm-gateway:
+        condition: service_started
+      retrieval-service:
+        condition: service_started
 
   tool-registry:
     build: ./tool-registry
@@ -145,6 +152,9 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://naming-server:8761/eureka/"
     networks:
       - platform_network
+    depends_on:
+      naming-server:
+        condition: service_healthy
 
   naming-server:
     build: ./naming-server
@@ -152,6 +162,12 @@ services:
       - "8761:8761"
     networks:
       - platform_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8761/eureka/apps >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   api-gateway:
     build: ./api-gateway
@@ -159,10 +175,19 @@ services:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://naming-server:8761/eureka/
+      LLM_GATEWAY_URL: http://llm-gateway:8767
+      MEMORY_SERVICE_URL: http://service-memory:8000
     networks:
       - platform_network
     depends_on:
-      - naming-server
+      naming-server:
+        condition: service_healthy
+      agent-service:
+        condition: service_started
+      retrieval-service:
+        condition: service_started
+      tool-registry:
+        condition: service_started
 
 networks:
   platform_network:
