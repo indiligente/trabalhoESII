@@ -1,0 +1,6 @@
+TF_ESII\tool_registry\tools\CalculatorToolTest.class
+TF_ESII\tool_registry\controller\ToolControllerTest.class
+TF_ESII\tool_registry\service\ToolExecutorServiceTest.class
+TF_ESII\tool_registry\service\ToolServiceTest.class
+TF_ESII\tool_registry\ToolRegistryApplicationTests.class
+TF_ESII\tool_registry\tools\DatabaseQueryToolTest.class
