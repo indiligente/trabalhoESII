@@ -116,6 +116,7 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_DATA_REDIS_HOST: redis
       LLM_GATEWAY_URL: http://llm-gateway:8767
+      TOOL_REGISTRY_URL: http://tool-registry:8400
       EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
       EUREKA_CLIENT_FETCH_REGISTRY: "false"
       SPRING_AI_OLLAMA_CHAT_ENABLED: "false"
@@ -127,6 +128,16 @@ services:
       - rabbitmq
       - llm-gateway
       - retrieval-service
+
+  tool-registry:
+    build: ./tool-registry
+    ports:
+      - "8082:8400"
+    environment:
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+    networks:
+      - platform_network
 
 networks:
   platform_network:

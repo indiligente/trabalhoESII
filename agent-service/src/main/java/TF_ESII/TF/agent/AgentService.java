@@ -13,6 +13,9 @@ import TF_ESII.TF.DTO.llm.LlmChatResponse;
 import TF_ESII.TF.DTO.llm.LlmMessage;
 import TF_ESII.TF.feign.LlmGatewayClient;
 import TF_ESII.TF.feign.MemoryServiceClient;
+import TF_ESII.TF.feign.ToolRegistryClient;
+import TF_ESII.TF.DTO.Tool;
+import TF_ESII.TF.DTO.ToolInvocationRequest;
 
 @Service
 public class AgentService {
@@ -37,12 +40,14 @@ public class AgentService {
     private final MemoryServiceClient memoryServiceClient;
     private final AgentTools agentTools;
     private final RabbitTemplate rabbitTemplate;
+    private final ToolRegistryClient toolRegistryClient;
 
-    public AgentService(LlmGatewayClient llmGatewayClient, MemoryServiceClient memoryServiceClient, AgentTools agentTools, RabbitTemplate rabbitTemplate) {
+    public AgentService(LlmGatewayClient llmGatewayClient, MemoryServiceClient memoryServiceClient, AgentTools agentTools, RabbitTemplate rabbitTemplate, ToolRegistryClient toolRegistryClient) {
         this.llmGatewayClient = llmGatewayClient;
         this.memoryServiceClient = memoryServiceClient;
         this.agentTools = agentTools;
         this.rabbitTemplate = rabbitTemplate;
+        this.toolRegistryClient = toolRegistryClient;
     }
 
     public AgentResponse processar(AgentRequest request) {
@@ -63,7 +68,9 @@ public class AgentService {
 
         List<String> ferramentasUsadas = new ArrayList<>();
         int iteracao = 0;
-
+        
+        List<Tool> ferramentasDisponiveis = toolRegistryClient.listTools();
+        
         while (iteracao < MAX_ITERACOES) {
             iteracao++;
             long inicio = Instant.now().toEpochMilli();
@@ -96,7 +103,8 @@ public class AgentService {
             for (var toolCall : respostaLLM.toolCalls()) {
                 ferramentasUsadas.add(toolCall.name());
 
-                String resultado = "{}";
+                ToolInvocationRequest requestPayload = new ToolInvocationRequest((Map<String, Object>) toolCall.arguments());
+                String resultado = toolRegistryClient.executeTool(toolCall.name(), requestPayload);
 
                 LlmMessage observacao = new LlmMessage("tool", "id=" + toolCall.id() + " name=" + toolCall.name() + " result=" + resultado);
                 historico.add(observacao);

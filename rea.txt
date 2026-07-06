@@ -1,0 +1,42 @@
+# Projeto TrabalhoESII: Sistema de Agentes Inteligentes
+
+Este projeto implementa uma arquitetura de microsserviços distribuídos focada em Agentes de IA Autônomos. O sistema integra LLMs, memória persistente, busca vetorial (RAG) e um registro de ferramentas centralizado.
+
+## 🛠 Status Atual (O que foi feito)
+Até o momento, a infraestrutura base e a comunicação entre os serviços foram consolidadas:
+
+* **Infraestrutura:** Ambiente totalmente conteinerizado utilizando *Docker Compose*, com serviços para Agente, Gateway LLM, Registro de Ferramentas, Memória, Recuperação, Postgres, Qdrant e RabbitMQ.
+* **Comunicação:** Implementação bem-sucedida de chamadas via *Feign Client* entre os serviços, corrigindo conflitos de portas, mapeamento de rotas e contratos de API (DTOs).
+* **Integração:** Validação da comunicação via protocolo HTTP entre `agent-service` e `tool-registry`.
+* **Estabilidade:** O sistema encontra-se operacional, com as rotas de comunicação entre o Agente e o Registro de Ferramentas validadas.
+
+## 🚀 Próximos Passos (Roteiro de Finalização)
+Para elevar o projeto ao nível de um sistema autônomo, o foco deve ser na lógica de execução e na orquestração:
+
+### 1. Implementação do Loop ReAct (Reason + Act)
+Atualmente, o agente responde de forma estática. Precisamos que ele execute o ciclo de raciocínio:
+* **Ação:** Injetar a lista de ferramentas disponíveis dinamicamente no `System Prompt` do Agente.
+* **Execução:** Implementar o loop no `AgentService` que detecta chamadas de ferramentas (`tool_calls`), interrompe o fluxo para processamento externo (`Tool Registry`), coleta o resultado e reinicia a interação com o LLM enviando o contexto atualizado.
+
+### 2. Integração com Memory Service
+Conectar a memória de longo prazo para permitir contexto:
+* **Ação:** Integrar o `MemoryServiceClient` no `AgentService` para carregar e salvar mensagens por `sessionId` em cada turno.
+* **Objetivo:** Permitir que o Agente "lembre" de interações passadas.
+
+### 3. Implementação de RAG (Retrieval-Augmented Generation)
+Conectar o conhecimento técnico ao agente:
+* **Ação:** Integrar o `RetrievalServiceClient` como uma ferramenta no `Tool Registry`.
+* **Objetivo:** Quando o LLM for questionado sobre tópicos específicos, ele deverá acionar a busca vetorial no `Qdrant` para embasar sua resposta.
+
+### 4. Telemetria e Observabilidade
+* **Ação:** Consumir as métricas enviadas para a fila do `RabbitMQ`.
+* **Objetivo:** Validar o desempenho do sistema, medindo latência e utilização de ferramentas.
+
+---
+
+## 💻 Como Rodar o Projeto
+
+1. Certifique-se de ter o Docker e Docker Compose instalados.
+2. Na raiz do projeto, execute:
+   ```bash
+   sudo docker compose up -d --build
