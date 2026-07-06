@@ -11,6 +11,12 @@ env/
 .env/
 venv*/
 env*/
+*.class
+
+# --- Java / Maven ---
+target/
+*.jar
+!**/src/**/target/
 
 # Bytecode (arquivos compilados)
 __pycache__/

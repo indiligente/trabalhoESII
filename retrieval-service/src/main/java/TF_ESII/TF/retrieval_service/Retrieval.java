@@ -25,7 +25,7 @@ public class Retrieval {
 		SearchRequest requisicao = SearchRequest.builder()
 			.query(perguntaUsuario)
 			.topK(topK)
-			.similarityThreshold(0.7)
+			.similarityThreshold(0.3)
 			.build();
 		return vectorStore.similaritySearch(requisicao);
 	}

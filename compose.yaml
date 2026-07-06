@@ -49,7 +49,7 @@ services:
     image: ollama/ollama:latest
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull", "qwen2.5"]
+    entrypoint: ["ollama", "pull", "qwen2.5:3b"]
     networks:
       - platform_network
     depends_on:
@@ -60,7 +60,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/postgres
       REDIS_URL: redis://redis:6379/0
     networks:
       - platform_network
@@ -84,7 +84,7 @@ services:
       - "8767:8767"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      LLM_MODEL: qwen2.5
+      LLM_MODEL: qwen2.5:3b
     networks:
       - platform_network
     depends_on:
@@ -105,8 +105,10 @@ services:
     networks:
       - platform_network
     depends_on:
-      - qdrant
-      - ollama-pull-embed
+      qdrant:
+        condition: service_started
+      ollama-pull-embed:
+        condition: service_completed_successfully
 
   agent-service:
     build: ./agent-service
@@ -117,6 +119,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       LLM_GATEWAY_URL: http://llm-gateway:8767
       TOOL_REGISTRY_URL: http://tool-registry:8400
+      RETRIEVAL_SERVICE_URL: http://retrieval-service:8766
       EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
       EUREKA_CLIENT_FETCH_REGISTRY: "false"
       SPRING_AI_OLLAMA_CHAT_ENABLED: "false"

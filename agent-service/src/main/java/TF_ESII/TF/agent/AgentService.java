@@ -2,8 +2,10 @@ package TF_ESII.TF.agent;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import TF_ESII.TF.DTO.AgentRequest;
@@ -70,13 +72,14 @@ public class AgentService {
         int iteracao = 0;
         
         List<Tool> ferramentasDisponiveis = toolRegistryClient.listTools();
+        List<Map<String, Object>> toolsForLlm = formatToolsForLlm(ferramentasDisponiveis);
         
         while (iteracao < MAX_ITERACOES) {
             iteracao++;
             long inicio = Instant.now().toEpochMilli();
 
             LlmChatResponse respostaLLM = llmGatewayClient.chat(
-                new LlmChatRequest(historico, null)
+                new LlmChatRequest(historico, toolsForLlm)
             );
 
             long duracaoMs = Instant.now().toEpochMilli() - inicio;
@@ -103,8 +106,16 @@ public class AgentService {
             for (var toolCall : respostaLLM.toolCalls()) {
                 ferramentasUsadas.add(toolCall.name());
 
-                ToolInvocationRequest requestPayload = new ToolInvocationRequest((Map<String, Object>) toolCall.arguments());
-                String resultado = toolRegistryClient.executeTool(toolCall.name(), requestPayload);
+                String resultado;
+                if ("buscarNaBaseDeConhecimento".equals(toolCall.name())) {
+                    String consulta = (String) ((Map<String, Object>) toolCall.arguments()).get("consulta");
+                    resultado = agentTools.buscarNaBaseDeConhecimento(consulta);
+                } else if ("obterDataHoraAtual".equals(toolCall.name())) {
+                    resultado = agentTools.obterDataHoraAtual();
+                } else {
+                    ToolInvocationRequest requestPayload = new ToolInvocationRequest((Map<String, Object>) toolCall.arguments());
+                    resultado = toolRegistryClient.executeTool(toolCall.name(), requestPayload);
+                }
 
                 LlmMessage observacao = new LlmMessage("tool", "id=" + toolCall.id() + " name=" + toolCall.name() + " result=" + resultado);
                 historico.add(observacao);
@@ -161,5 +172,75 @@ public class AgentService {
         int valorFim = json.indexOf("\"", valorInicio);
         if (valorInicio <= 0 || valorFim < 0) return json;
         return json.substring(valorInicio, valorFim);
+    }
+
+    private List<Map<String, Object>> formatToolsForLlm(List<Tool> ferramentas) {
+        ObjectMapper mapper = new ObjectMapper();
+        List<Map<String, Object>> formattedTools = new ArrayList<>();
+
+        if (ferramentas != null) {
+            for (Tool tool : ferramentas) {
+                try {
+                    Map<String, Object> toolMap = new HashMap<>();
+                    toolMap.put("type", "function");
+
+                    Map<String, Object> functionMap = new HashMap<>();
+                    functionMap.put("name", tool.name());
+                    functionMap.put("description", tool.description());
+
+                    if (tool.parametersSchema() != null && !tool.parametersSchema().isBlank()) {
+                        Map<String, Object> params = mapper.readValue(tool.parametersSchema(), Map.class);
+                        functionMap.put("parameters", params);
+                    } else {
+                        functionMap.put("parameters", Map.of("type", "object", "properties", Map.of()));
+                    }
+
+                    toolMap.put("function", functionMap);
+                    formattedTools.add(toolMap);
+                } catch (Exception e) {
+                }
+            }
+        }
+
+        // Adiciona ferramentas locais
+        try {
+            // buscarNaBaseDeConhecimento
+            Map<String, Object> ragTool = new HashMap<>();
+            ragTool.put("type", "function");
+
+            Map<String, Object> ragFunc = new HashMap<>();
+            ragFunc.put("name", "buscarNaBaseDeConhecimento");
+            ragFunc.put("description", "Busca informações relevantes na base de conhecimento (RAG) sobre tópicos específicos.");
+            ragFunc.put("parameters", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "consulta", Map.of(
+                        "type", "string",
+                        "description", "A consulta ou pergunta para pesquisar na base de conhecimento."
+                    )
+                ),
+                "required", List.of("consulta")
+            ));
+            ragTool.put("function", ragFunc);
+            formattedTools.add(ragTool);
+
+            // obterDataHoraAtual
+            Map<String, Object> timeTool = new HashMap<>();
+            timeTool.put("type", "function");
+
+            Map<String, Object> timeFunc = new HashMap<>();
+            timeFunc.put("name", "obterDataHoraAtual");
+            timeFunc.put("description", "Obtém a data e hora atual do sistema.");
+            timeFunc.put("parameters", Map.of(
+                "type", "object",
+                "properties", Map.of(),
+                "required", List.of()
+            ));
+            timeTool.put("function", timeFunc);
+            formattedTools.add(timeTool);
+        } catch (Exception e) {
+        }
+
+        return formattedTools.isEmpty() ? null : formattedTools;
     }
 }

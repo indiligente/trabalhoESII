@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import TF_ESII.TF.DTO.retrieval.RetrievalSearchRequest;
 import TF_ESII.TF.DTO.retrieval.RetrievalSearchResponse;
 
-@FeignClient(name = "retrieval-service")
+@FeignClient(name = "retrieval-service", url = "${RETRIEVAL_SERVICE_URL:http://localhost:8766}")
 public interface RetrievalServiceClient {
 
     @PostMapping("/api/retrieval/search")
